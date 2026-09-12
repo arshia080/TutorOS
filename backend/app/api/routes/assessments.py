@@ -18,6 +18,7 @@ from app.schemas.assessment import (
     QuestionCreate,
     QuestionOptionRead,
     QuestionRead,
+    QuestionUpdate,
     ResponseGradedRead,
     ResponseRead,
     ResponseSubmit,
@@ -97,6 +98,18 @@ def list_questions(
     svc.get_owned_assessment(db, teacher, assessment_id)
     questions = svc.list_questions(db, assessment_id)
     return [_question_read(db, q, include_correct=True) for q in questions]
+
+
+@router.patch("/assessments/{assessment_id}/questions/{question_id}", response_model=QuestionRead)
+def update_question(
+    assessment_id: uuid.UUID,
+    question_id: uuid.UUID,
+    data: QuestionUpdate,
+    db: Session = Depends(get_db),
+    teacher: User = Depends(require_teacher),
+) -> QuestionRead:
+    question = svc.update_question(db, teacher, assessment_id, question_id, data)
+    return _question_read(db, question, include_correct=True)
 
 
 @router.delete("/assessments/{assessment_id}/questions/{question_id}", status_code=204)

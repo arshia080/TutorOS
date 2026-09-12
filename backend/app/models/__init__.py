@@ -1,3 +1,4 @@
+from app.models.ai_job import AIExtractionJob, ExtractionJobStatus
 from app.models.analytics import Attendance, AttendanceStatus, PerformanceSnapshot, TrendDirection
 from app.models.assessment import (
     Assessment,
@@ -12,6 +13,15 @@ from app.models.assessment import (
 )
 from app.models.batch import Batch, BatchStudent, BatchStudentStatus
 from app.models.homework import Homework, HomeworkAttachment, HomeworkSubmission, SubmissionStatus
+from app.models.practice import (
+    PracticeQuestion,
+    PracticeQuestionOption,
+    PracticeResponse,
+    PracticeSet,
+    PracticeSetStatus,
+    Recommendation,
+    RecommendationStatus,
+)
 from app.models.profile import StudentProfile, TeacherProfile
 from app.models.subject import Subject, Topic
 from app.models.user import User, UserRole
@@ -43,4 +53,13 @@ __all__ = [
     "TrendDirection",
     "Attendance",
     "AttendanceStatus",
+    "AIExtractionJob",
+    "ExtractionJobStatus",
+    "PracticeSet",
+    "PracticeSetStatus",
+    "PracticeQuestion",
+    "PracticeQuestionOption",
+    "PracticeResponse",
+    "Recommendation",
+    "RecommendationStatus",
 ]

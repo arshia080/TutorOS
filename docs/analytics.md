@@ -195,3 +195,61 @@ right now. `BackgroundTasks` gives the same user-visible guarantee the spec asks
 for ("don't block the HTTP request that triggers it") without infrastructure
 this phase can't verify. The call site (`analytics_service.recalculate_after_attempt`)
 is the seam to swap for a real Celery task later — nothing else changes.
+
+## Personalized practice: before/after mastery (product spec §19)
+
+Implemented in `app/services/practice_service.py::complete_practice_set`.
+
+**A completed practice set never rewrites the real exam-based topic mastery**
+computed above, and completing one never calls `compute_topic_performance()`
+to recompute it. If it did, a student could inflate their "official" mastery
+— the number teachers see on the Attention Panel and class charts — just by
+grinding easy self-generated practice questions, which the exam-based formula
+was never designed to guard against. Practice responses live in their own
+tables (`practice_responses`, etc.) and are never joined into the query
+`compute_topic_performance()` runs.
+
+Instead, `mastery_after` is a **new, separately-scoped number**: the same
+weighted formula, weights, and difficulty-weighting as the real formula above,
+but treating the practice set itself as one fresh data point:
+
+```
+practice_accuracy            = sum(score) / sum(marks) over the practice set's own responses
+practice_difficulty_adjusted = same DIFFICULTY_WEIGHTS-weighted calc as compute_topic_performance,
+                                applied to the practice set's own questions
+practice_consistency         = same pstdev-based formula, over the practice set's own per-question ratios
+
+mastery_after = 100 * (
+    mastery_weight_recent            * practice_accuracy
+  + mastery_weight_historical        * (topic's recent_accuracy AT THE TIME the set was generated, now
+                                         treated as the "older" baseline the practice set is compared against)
+  + mastery_weight_difficulty_adjusted * practice_difficulty_adjusted
+  + mastery_weight_consistency       * (practice_consistency / 100)
+)
+```
+
+`mastery_before` is simply `compute_topic_performance(topic).mastery_score` at
+the moment the practice set was generated (stored on the `PracticeSet` row, so
+it can't drift if the student's real exam performance changes while they're
+mid-practice).
+
+**This number is always presented as an observed change, never as proof the
+practice caused it** — `PracticeCompletionRead.note` carries this disclaimer
+verbatim in every API response, and the frontend result screen surfaces it
+directly under the before/after figures. A single practice set is a small
+sample; mastery naturally varies between attempts for reasons having nothing
+to do with the practice itself.
+
+Weak-topic detection is not a separate calculation — a topic is "weak" purely
+when `compute_topic_performance(...).mastery_score < settings.weak_topic_mastery_threshold`
+(default 60, the same "Needs Improvement"/"Critical" boundary from the mastery
+bands above). This threshold, and the default 5/3/2 easy/medium/hard practice
+mix (`practice_set_easy_count`/`practice_set_medium_count`/`practice_set_hard_count`),
+are `Settings` fields, not literals — the mix can also be overridden per
+request via `GeneratePracticeRequest`.
+
+Practice questions are restricted to single-answer types (MCQ, TRUE_FALSE,
+NUMERICAL) — see the `ponytail:` comment on `PRACTICE_QUESTION_TYPES` in
+`app/models/practice.py` for why (no MULTI_SELECT join table, no subjective
+teacher-grading step, both of which would break the instant self-serve
+practice loop this feature exists for).

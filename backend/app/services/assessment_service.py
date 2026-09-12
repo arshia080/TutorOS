@@ -22,6 +22,7 @@ from app.models.batch import Batch, BatchStudent, BatchStudentStatus
 from app.models.subject import Subject
 from app.models.user import User, UserRole
 from app.schemas.assessment import AssessmentCreate, AssessmentUpdate, QuestionCreate, ResponseSubmit
+from app.services.question_validation import validate_option_shape
 
 ASSESSMENT_NOT_FOUND = HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assessment not found")
 QUESTION_NOT_FOUND = HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Question not found")
@@ -161,6 +162,35 @@ def add_question(db: Session, teacher: User, assessment_id: uuid.UUID, data: Que
     return question
 
 
+def update_question(db: Session, teacher: User, assessment_id: uuid.UUID, question_id: uuid.UUID, data) -> Question:
+    """Backs the AI Extraction Review actions: Edit / Change topic / Change
+    difficulty / Change marks. AI classifications are never immutable (spec
+    section 15) -- this is the same edit path regardless of question source.
+    """
+    assessment = get_owned_assessment(db, teacher, assessment_id)
+    if assessment.status in (AssessmentStatus.PUBLISHED, AssessmentStatus.CLOSED):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Cannot edit a published or closed assessment")
+
+    question = db.get(Question, question_id)
+    if question is None or question.assessment_id != assessment_id:
+        raise QUESTION_NOT_FOUND
+
+    updates = data.model_dump(exclude_unset=True, exclude={"options"})
+    for field, value in updates.items():
+        setattr(question, field, value)
+
+    if data.options is not None:
+        db.query(QuestionOption).filter(QuestionOption.question_id == question.id).delete()
+        for i, opt in enumerate(data.options):
+            db.add(
+                QuestionOption(question_id=question.id, option_text=opt.option_text, is_correct=opt.is_correct, order_index=i)
+            )
+
+    db.commit()
+    db.refresh(question)
+    return question
+
+
 def delete_question(db: Session, teacher: User, assessment_id: uuid.UUID, question_id: uuid.UUID) -> None:
     assessment = get_owned_assessment(db, teacher, assessment_id)
     if assessment.status in (AssessmentStatus.PUBLISHED, AssessmentStatus.CLOSED):
@@ -211,37 +241,10 @@ def validate_for_publish(db: Session, assessment: Assessment) -> list[str]:
     for q in questions:
         total_marks += q.marks
         options = options_by_question.get(q.id, [])
-        correct = [o for o in options if o.is_correct]
         label = f'Question "{q.question_text[:40]}"'
-
-        if q.question_type == QuestionType.MCQ:
-            if len(options) < 2:
-                errors.append(f"{label}: MCQ must have at least 2 options")
-            if len(correct) != 1:
-                errors.append(f"{label}: MCQ must have exactly one correct option")
-        elif q.question_type == QuestionType.MULTI_SELECT:
-            if len(options) < 2:
-                errors.append(f"{label}: multi-select must have at least 2 options")
-            if len(correct) == 0:
-                errors.append(f"{label}: multi-select must have at least one correct option")
-        elif q.question_type == QuestionType.TRUE_FALSE:
-            if len(options) != 2:
-                errors.append(f"{label}: true/false must have exactly 2 options")
-            if len(correct) != 1:
-                errors.append(f"{label}: true/false must have exactly one correct option")
-        elif q.question_type == QuestionType.NUMERICAL:
-            if len(options) != 1:
-                errors.append(f"{label}: numerical questions must store exactly one correct answer")
-            elif not correct:
-                errors.append(f"{label}: numerical answer must be marked correct")
-            else:
-                try:
-                    float(options[0].option_text)
-                except ValueError:
-                    errors.append(f"{label}: numerical answer must be a valid number")
-        elif q.question_type in (QuestionType.SHORT_ANSWER, QuestionType.LONG_ANSWER):
-            if options:
-                errors.append(f"{label}: subjective questions must not have options")
+        option_pairs = [(o.option_text, o.is_correct) for o in options]
+        for err in validate_option_shape(q.question_type, option_pairs):
+            errors.append(f"{label}: {err}")
 
     if abs(total_marks - assessment.total_marks) > 1e-9:
         errors.append(

@@ -62,6 +62,15 @@ class QuestionOptionRead(BaseModel):
     is_correct: bool | None = None  # omitted from output for a student mid-attempt
 
 
+class QuestionUpdate(BaseModel):
+    question_text: str | None = Field(default=None, min_length=1)
+    topic_id: uuid.UUID | None = None
+    difficulty: str | None = None
+    marks: float | None = Field(default=None, gt=0)
+    explanation: str | None = None
+    options: list[QuestionOptionCreate] | None = None  # when given, replaces the whole option set
+
+
 class QuestionRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -74,6 +83,7 @@ class QuestionRead(BaseModel):
     marks: float
     order_index: int
     explanation: str | None = None
+    source: str = "MANUAL"
     options: list[QuestionOptionRead] = []
 
 

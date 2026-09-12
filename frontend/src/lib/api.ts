@@ -343,6 +343,7 @@ export interface Question {
   marks: number;
   order_index: number;
   explanation: string | null;
+  source: string;
   options: QuestionOption[];
 }
 
@@ -552,4 +553,135 @@ export function getAttentionPanel(batchId: string) {
 
 export function getClassPerformance(batchId: string) {
   return request<ClassPerformance>(`/batches/${batchId}/class-performance`, {}, true);
+}
+
+// ---------------------------------------------------------------------------
+// AI
+// ---------------------------------------------------------------------------
+
+export function generateQuestions(data: {
+  batch_id: string;
+  subject_id: string;
+  topic_id?: string;
+  grade: string;
+  count: number;
+  difficulty: string;
+  question_types: QuestionType[];
+  total_marks: number;
+  duration_minutes: number;
+}) {
+  return request<Assessment>("/ai/generate-questions", { method: "POST", body: JSON.stringify(data) }, true);
+}
+
+export function regenerateQuestion(assessmentId: string, questionId: string) {
+  return request<Question>(`/ai/assessments/${assessmentId}/questions/${questionId}/regenerate`, { method: "POST" }, true);
+}
+
+export function updateQuestion(
+  assessmentId: string,
+  questionId: string,
+  data: { question_text?: string; topic_id?: string; difficulty?: string; marks?: number },
+) {
+  return request<Question>(`/assessments/${assessmentId}/questions/${questionId}`, { method: "PATCH", body: JSON.stringify(data) }, true);
+}
+
+export interface ExtractionJob {
+  id: string;
+  status: "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED";
+  assessment_id: string | null;
+  error_message: string | null;
+}
+
+export function uploadPdfForExtraction(batchId: string, subjectId: string, file: File) {
+  const form = new FormData();
+  form.set("batch_id", batchId);
+  form.set("subject_id", subjectId);
+  form.set("file", file);
+  return requestForm<ExtractionJob>("/ai/pdf-extract", "POST", form);
+}
+
+export function getExtractionJob(jobId: string) {
+  return request<ExtractionJob>(`/ai/jobs/${jobId}`, {}, true);
+}
+
+export function getStudentTopicInsight(studentId: string, topicId: string) {
+  return request<{ insight: string }>(`/ai/students/${studentId}/topics/${topicId}/insight`, {}, true);
+}
+
+// ---------------------------------------------------------------------------
+// Personalized practice
+// ---------------------------------------------------------------------------
+
+export interface PracticeOption {
+  id: string;
+  option_text: string;
+  is_correct: boolean | null;
+}
+
+export interface PracticeQuestion {
+  id: string;
+  question_text: string;
+  question_type: QuestionType;
+  difficulty: string;
+  marks: number;
+  order_index: number;
+  options: PracticeOption[];
+}
+
+export interface PracticeSet {
+  id: string;
+  topic_id: string;
+  topic_name: string;
+  title: string;
+  difficulty: string;
+  status: "IN_PROGRESS" | "COMPLETED";
+  mastery_before: number;
+  mastery_after: number | null;
+  created_at: string;
+  completed_at: string | null;
+  questions: PracticeQuestion[];
+}
+
+export interface PracticeGradedResponse {
+  question_id: string;
+  selected_option_id: string | null;
+  response_text: string | null;
+  is_correct: boolean;
+  score: number;
+}
+
+export interface PracticeCompletion {
+  practice_set: PracticeSet;
+  responses: PracticeGradedResponse[];
+  mastery_before: number;
+  mastery_after: number;
+  delta: number;
+  note: string;
+}
+
+export function generatePractice(
+  studentId: string,
+  topicId: string,
+  data: { easy_count?: number; medium_count?: number; hard_count?: number } = {},
+) {
+  return request<PracticeSet>(`/students/${studentId}/topics/${topicId}/practice`, { method: "POST", body: JSON.stringify(data) }, true);
+}
+
+export function getPracticeSet(practiceSetId: string) {
+  return request<PracticeSet>(`/practice-sets/${practiceSetId}`, {}, true);
+}
+
+export function submitPracticeResponse(
+  practiceSetId: string,
+  data: { question_id: string; selected_option_id?: string; response_text?: string },
+) {
+  return request<{ question_id: string; saved: boolean }>(
+    `/practice-sets/${practiceSetId}/responses`,
+    { method: "POST", body: JSON.stringify(data) },
+    true,
+  );
+}
+
+export function completePracticeSet(practiceSetId: string) {
+  return request<PracticeCompletion>(`/practice-sets/${practiceSetId}/complete`, { method: "POST" }, true);
 }

@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes import (
+    ai,
     analytics,
     assessments,
     attendance,
@@ -9,6 +10,7 @@ from app.api.routes import (
     batches,
     health,
     homework,
+    practice,
     students,
     subjects,
     teachers,
@@ -32,12 +34,14 @@ app.add_middleware(
 register_exception_handlers(app)
 
 app.include_router(health.router)
+app.include_router(ai.router)
 app.include_router(analytics.router)
 app.include_router(auth.router)
 app.include_router(assessments.router)
 app.include_router(attendance.router)
 app.include_router(batches.router)
 app.include_router(homework.router)
+app.include_router(practice.router)
 app.include_router(students.router)
 app.include_router(subjects.router)
 app.include_router(teachers.router)

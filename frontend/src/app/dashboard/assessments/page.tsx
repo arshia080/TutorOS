@@ -21,6 +21,8 @@ import {
   type Subject,
   ApiError,
 } from "@/lib/api";
+import { AIGenerateForm } from "./ai-generate-form";
+import { PDFUploadForm } from "./pdf-upload-form";
 
 const STATUS_VARIANT: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
   DRAFT: "secondary",
@@ -42,6 +44,8 @@ function TeacherAssessmentsView() {
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
+  const [showAIForm, setShowAIForm] = useState(false);
+  const [showPdfForm, setShowPdfForm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -88,8 +92,60 @@ function TeacherAssessmentsView() {
     <div>
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Assessments</h1>
-        <Button onClick={() => setShowForm((v) => !v)}>{showForm ? "Cancel" : "New Assessment"}</Button>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={() => {
+              setShowPdfForm((v) => !v);
+              setShowAIForm(false);
+              setShowForm(false);
+            }}
+          >
+            {showPdfForm ? "Cancel" : "Upload PDF"}
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => {
+              setShowAIForm((v) => !v);
+              setShowPdfForm(false);
+              setShowForm(false);
+            }}
+          >
+            {showAIForm ? "Cancel" : "Generate with AI"}
+          </Button>
+          <Button
+            onClick={() => {
+              setShowForm((v) => !v);
+              setShowAIForm(false);
+              setShowPdfForm(false);
+            }}
+          >
+            {showForm ? "Cancel" : "New Assessment"}
+          </Button>
+        </div>
       </div>
+
+      {showAIForm && (
+        <Card className="mt-4 max-w-lg">
+          <CardHeader>
+            <CardTitle className="text-base">Generate questions with AI</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <AIGenerateForm />
+          </CardContent>
+        </Card>
+      )}
+
+      {showPdfForm && (
+        <Card className="mt-4 max-w-lg">
+          <CardHeader>
+            <CardTitle className="text-base">Extract questions from a PDF</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <PDFUploadForm />
+          </CardContent>
+        </Card>
+      )}
 
       {showForm && (
         <Card className="mt-4 max-w-lg">

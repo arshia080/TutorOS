@@ -215,7 +215,7 @@ def compute_student_performance(db: Session, student_id: uuid.UUID) -> StudentPe
 
     overall_mastery = round(sum(t.mastery_score for t in topics) / len(topics), 2) if topics else 0.0
     strengths = [t for t in topics if t.mastery_score >= 75]
-    weak = [t for t in topics if t.mastery_score < 60]
+    weak = [t for t in topics if t.mastery_score < settings.weak_topic_mastery_threshold]
 
     return StudentPerformanceSummary(
         student_id=student_id, overall_mastery=overall_mastery, topics=topics, strengths=strengths, weak_topics=weak

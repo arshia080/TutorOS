@@ -2,12 +2,15 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TrendArrow } from "@/components/trend-arrow";
 import {
   getDashboard,
   getStudentPerformance,
+  generatePractice,
   type DashboardOverview,
   type StudentPerformance,
   ApiError,
@@ -60,14 +63,29 @@ function TeacherOverview() {
 }
 
 function StudentOverview({ studentId }: { studentId: string }) {
+  const router = useRouter();
   const [perf, setPerf] = useState<StudentPerformance | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [generatingTopicId, setGeneratingTopicId] = useState<string | null>(null);
+  const [generateError, setGenerateError] = useState<string | null>(null);
 
   useEffect(() => {
     getStudentPerformance(studentId)
       .then(setPerf)
       .catch((err) => setError(err instanceof ApiError ? err.message : "Failed to load performance"));
   }, [studentId]);
+
+  async function handleGeneratePractice(topicId: string) {
+    setGenerateError(null);
+    setGeneratingTopicId(topicId);
+    try {
+      const practiceSet = await generatePractice(studentId, topicId);
+      router.push(`/dashboard/practice/${practiceSet.id}`);
+    } catch (err) {
+      setGenerateError(err instanceof ApiError ? err.message : "Failed to generate practice set");
+      setGeneratingTopicId(null);
+    }
+  }
 
   return (
     <div>
@@ -125,17 +143,26 @@ function StudentOverview({ studentId }: { studentId: string }) {
                 <CardTitle className="text-base">Needs Practice</CardTitle>
               </CardHeader>
               <CardContent>
+                {generateError && <p className="mb-2 text-sm text-red-600">{generateError}</p>}
                 {perf.weak_topics.length === 0 ? (
                   <p className="text-sm text-muted-foreground">No weak topics right now.</p>
                 ) : (
-                  <ul className="space-y-1">
+                  <ul className="space-y-2">
                     {perf.weak_topics.map((t) => (
                       <li key={t.topic_id} className="flex items-center justify-between text-sm">
-                        <span>{t.topic_name}</span>
                         <span className="flex items-center gap-2">
+                          {t.topic_name}
                           <span className="font-medium text-red-600">{t.mastery_score}%</span>
                           <TrendArrow trend={t.trend} />
                         </span>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={generatingTopicId === t.topic_id}
+                          onClick={() => handleGeneratePractice(t.topic_id)}
+                        >
+                          {generatingTopicId === t.topic_id ? "Generating..." : "Generate Practice"}
+                        </Button>
                       </li>
                     ))}
                   </ul>

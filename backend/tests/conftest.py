@@ -4,8 +4,11 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+import app.ai as ai_module
 import app.db.session as db_session_module
 import app.storage as storage_module
+from app.ai.base import AIProvider, AIProviderError
+from app.api.routes.ai import get_provider
 from app.core.config import settings
 from app.db.base import Base
 from app.db.session import get_db
@@ -65,6 +68,43 @@ def db_session():
         yield db
     finally:
         db.close()
+
+
+class FakeAIProvider(AIProvider):
+    """Test double -- no real API calls happen in the suite. Configure
+    `structured_response` / `text_responses` per test; both raise
+    AIProviderError if `should_error` is set, so error-handling paths are
+    exercisable without a real provider failure.
+    """
+
+    def __init__(self):
+        self.structured_response: dict | None = None
+        self.text_responses: list[str] = []
+        self.should_error: bool = False
+        self.calls: list[str] = []
+
+    def generate_structured(self, prompt: str, json_schema: dict, tool_name: str) -> dict:
+        self.calls.append(prompt)
+        if self.should_error:
+            raise AIProviderError("fake provider error")
+        return self.structured_response
+
+    def generate_text(self, prompt: str, max_tokens: int = 1024) -> str:
+        self.calls.append(prompt)
+        if self.should_error:
+            raise AIProviderError("fake provider error")
+        if len(self.text_responses) > 1:
+            return self.text_responses.pop(0)
+        return self.text_responses[0] if self.text_responses else ""
+
+
+@pytest.fixture
+def fake_ai_provider(monkeypatch):
+    provider = FakeAIProvider()
+    monkeypatch.setattr(ai_module, "get_ai_provider", lambda: provider)
+    app.dependency_overrides[get_provider] = lambda: provider
+    yield provider
+    del app.dependency_overrides[get_provider]
 
 
 def register(client: TestClient, name: str, email: str, password: str = "password123", role: str = "STUDENT") -> dict:
