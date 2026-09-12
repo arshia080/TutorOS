@@ -5,14 +5,23 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 import app.ai as ai_module
+import app.core.redis_client as redis_client_module
 import app.db.session as db_session_module
 import app.storage as storage_module
 from app.ai.base import AIProvider, AIProviderError
 from app.api.routes.ai import get_provider
+from app.celery_app import celery_app
 from app.core.config import settings
 from app.db.base import Base
 from app.db.session import get_db
 from app.main import app
+
+# Run Celery tasks synchronously, in-process -- the standard testing pattern,
+# so the suite needs no real broker/worker. `.delay(...)` behaves exactly like
+# calling the function directly; task_eager_propagates lets a task's exception
+# surface normally instead of being swallowed.
+celery_app.conf.task_always_eager = True
+celery_app.conf.task_eager_propagates = True
 
 engine = create_engine(
     "sqlite:///:memory:",
@@ -43,6 +52,32 @@ def _isolate_background_task_sessions(monkeypatch):
     # app.db.session.SessionLocal rather than the request-scoped get_db override --
     # point that at the same in-memory test engine or they'd hit the real database.
     monkeypatch.setattr(db_session_module, "SessionLocal", TestingSessionLocal)
+
+
+class FakeRedis:
+    """In-memory stand-in for the counters app/core/rate_limit.py keeps in
+    real Redis -- just enough of the client interface (incr/expire) for the
+    fixed-window rate limiter, so the suite needs no real Redis.
+    """
+
+    def __init__(self):
+        self.counts: dict[str, int] = {}
+
+    def incr(self, key: str) -> int:
+        self.counts[key] = self.counts.get(key, 0) + 1
+        return self.counts[key]
+
+    def expire(self, key: str, seconds: int) -> None:
+        pass
+
+
+@pytest.fixture(autouse=True)
+def _reset_rate_limits(monkeypatch):
+    # One FakeRedis per test (shared across requests within it, so counters
+    # actually accumulate) but never leaks into the next test.
+    fake = FakeRedis()
+    monkeypatch.setattr(redis_client_module, "get_redis", lambda: fake)
+    yield
 
 
 def _override_get_db():

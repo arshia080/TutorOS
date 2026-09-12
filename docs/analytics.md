@@ -187,14 +187,13 @@ still attended, just tardily. `attendance_percentage = present_days / total_mark
 ## Recalculation job
 
 `recalculate_topic()` persists a `compute_topic_performance()` result into
-`performance_snapshots`. It's triggered via FastAPI's `BackgroundTasks` after an
-attempt is finalized and after a teacher grades a subjective response — **not**
-Celery/RQ yet. Docker/Redis aren't available in this environment (see
-`docs/PROGRESS.md`), so wiring an actual broker can't even be tested end-to-end
-right now. `BackgroundTasks` gives the same user-visible guarantee the spec asks
-for ("don't block the HTTP request that triggers it") without infrastructure
-this phase can't verify. The call site (`analytics_service.recalculate_after_attempt`)
-is the seam to swap for a real Celery task later — nothing else changes.
+`performance_snapshots`. It's triggered as a real Celery task
+(`recalculate_after_attempt_task`, `app/celery_app.py`) after an attempt is
+finalized and after a teacher grades a subjective response, dispatched via
+`.delay(...)` over the Redis broker — so the triggering HTTP request returns
+immediately and the recalculation runs in a separate worker process. See
+`docs/architecture.md` for how this replaced the earlier `BackgroundTasks`
+version once Docker/Redis became available in this environment.
 
 ## Personalized practice: before/after mastery (product spec §19)
 

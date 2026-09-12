@@ -17,7 +17,7 @@ from app.schemas.homework import (
     SubmissionRead,
 )
 from app.services import homework_service
-from app.services.upload_service import save_upload
+from app.services.upload_service import content_disposition, save_upload
 from app.storage import get_storage
 
 router = APIRouter(prefix="/homework", tags=["homework"])
@@ -106,7 +106,7 @@ def download_attachment(
     return Response(
         content=content,
         media_type=attachment.mime_type,
-        headers={"Content-Disposition": f'attachment; filename="{attachment.file_name}"'},
+        headers={"Content-Disposition": content_disposition(attachment.file_name)},
     )
 
 
@@ -157,5 +157,5 @@ def download_submission(
     return Response(
         content=content,
         media_type=submission.mime_type,
-        headers={"Content-Disposition": f'attachment; filename="{submission.file_name}"'},
+        headers={"Content-Disposition": content_disposition(submission.file_name)},
     )

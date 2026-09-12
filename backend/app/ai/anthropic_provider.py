@@ -1,5 +1,9 @@
+import logging
+
 from app.ai.base import AIProvider, AIProviderError
 from app.core.config import settings
+
+logger = logging.getLogger(__name__)
 
 
 class AnthropicProvider(AIProvider):
@@ -35,12 +39,14 @@ class AnthropicProvider(AIProvider):
                 messages=[{"role": "user", "content": prompt}],
             )
         except Exception as e:  # network error, auth error, rate limit, etc.
+            logger.error("AI provider generate_structured failed (tool=%s): %s", tool_name, e)
             raise AIProviderError(f"AI provider request failed: {e}") from e
 
         for block in response.content:
             if getattr(block, "type", None) == "tool_use" and block.name == tool_name:
                 return block.input
 
+        logger.error("AI provider did not return the requested tool call (tool=%s)", tool_name)
         raise AIProviderError("AI provider did not return the requested structured tool call.")
 
     def generate_text(self, prompt: str, max_tokens: int = 1024) -> str:
@@ -52,9 +58,11 @@ class AnthropicProvider(AIProvider):
                 messages=[{"role": "user", "content": prompt}],
             )
         except Exception as e:
+            logger.error("AI provider generate_text failed: %s", e)
             raise AIProviderError(f"AI provider request failed: {e}") from e
 
         text_blocks = [block.text for block in response.content if getattr(block, "type", None) == "text"]
         if not text_blocks:
+            logger.error("AI provider returned no text content")
             raise AIProviderError("AI provider returned no text content.")
         return "\n".join(text_blocks)

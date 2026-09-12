@@ -1,5 +1,85 @@
 # Build Log
 
+## 2026-09-12 — Post-Phase-7: Docker unblocked, real Celery/Redis/S3
+
+Docker Desktop, previously broken across this project's entire development
+history, started working in this environment. That unblocked three items
+that Phases 0-7 had deferred purely for lack of infrastructure to build or
+test against — no design was wrong, only unbuildable. Migrated the running
+dev backend from SQLite to real Postgres first (`alembic upgrade head`, fresh
+seed, verified real computed analytics over curl) as a prerequisite.
+
+- **Real Celery + Redis** (`app/celery_app.py`): replaced every
+  `background_tasks.add_task(fn, ...)` call site with `fn.delay(...)` on a
+  `@celery_app.task`-wrapped version of the same function — no service-layer
+  logic changed, exactly as the Phase 7 docs predicted. `tests/conftest.py`
+  runs Celery in eager mode (`task_always_eager=True`) so the 133-test suite
+  needs no real broker. Beyond the test suite, live-verified against a real
+  worker process (`celery -A app.celery_app worker --pool=solo`) and the real
+  Redis container: dispatched a genuine PDF-extraction job over HTTP, watched
+  it flow through Redis into the separate worker process and complete —
+  something the eager-mode tests alone can't prove.
+- **Real S3-compatible storage** (`app/storage/s3.py`): added `S3Storage`
+  satisfying the existing `StorageBackend` interface, using `boto3` against
+  any S3-compatible endpoint — a MinIO container (`quay.io/minio/minio`;
+  Docker Hub's `minio/minio` repo is gone) added to `docker-compose.yml` for
+  dev, or real AWS S3/R2 in prod by leaving `S3_ENDPOINT_URL` unset. Selected
+  via `STORAGE_BACKEND=s3`; local disk stays the default. Live-verified
+  save/read/delete against the real MinIO container, including the
+  correct exception on a deleted key.
+- **Redis-backed rate limiting** (`app/core/rate_limit.py`): swapped the
+  module-level dict for a real `INCR`+`EXPIRE` fixed-window counter in Redis,
+  correct across multiple worker processes/instances (the old dict wasn't).
+  `tests/conftest.py` swaps in an in-memory `FakeRedis` test double so the
+  suite still needs no real Redis. Live-verified against the real Redis
+  container: 10 requests through, the 11th returns a real `429`.
+- Updated `docs/architecture.md`, `docs/development.md`, `docs/security.md`,
+  and `README.md` throughout to describe these as real/live rather than
+  deferred, and removed them from every "what's deferred" list.
+- **Still deferred** (no infrastructure gap, just scope): pagination on list
+  endpoints, parent role endpoints, student invite/credential-delivery flow,
+  rubric-based subjective grading. See "What was deliberately deferred" below
+  for the full original reasoning on each.
+
+## 2026-09-12 — Phase 7: Production hardening (final phase)
+
+**Testing:**
+- Audited section 30's checklist against the existing suite (auth, authorization isolation, assessment lifecycle, homework deadlines, analytics correctness, AI mocking, PDF pipeline) — all already covered exhaustively by Phases 0-6's own test suites. The one real gap: no test exercised the section 34 demo flow as **one continuous story**. Added `tests/test_demo_flow.py` — teacher creates batch/subject/topics → uploads a real PDF (AI extraction mocked, but the actual `pypdf` text extraction and validation gate run for real) → publishes → student attempts and gets graded → performance updates → Attention Panel surfaces the weak topic → practice generated (mocked) and completed → mastery before/after with the disclaimer, all as one test proving the phases actually compose, not just that each works in isolation.
+- Also added `tests/test_rate_limit.py` (2 tests) and `tests/test_upload_service.py` (4 tests, including a genuine security regression test — see below). **133 tests total, all passing, zero real external API calls.**
+
+**Security pass — findings and fixes:**
+- **Found and fixed a real vulnerability**: the two homework file-download endpoints interpolated the (only lightly sanitized) display filename directly into the `Content-Disposition` header — a filename containing a quote or CRLF could inject headers. Fixed with `upload_service.py::content_disposition()` (RFC 6266-compliant, strips every control character from the ASCII fallback, percent-encodes the full name), with a dedicated CRLF-injection regression test.
+- **Added rate limiting** (`app/core/rate_limit.py`) on every AI-backed endpoint (generation, regeneration, PDF extraction, insights, practice generation) — this was genuinely missing before this phase. In-memory, per-user, per-process (documented limitation — no working Redis in this environment to build/test a distributed version against; the upgrade path is one function). **Caught and fixed a real bug while building this**: the rate limit value was captured as a plain function argument at route-registration time, so `monkeypatch.setattr(settings, ...)` in tests had no effect — the limit must be read from `settings` *inside* the dependency function on every call, not baked into a closure at import time.
+- Audited and confirmed clean: password hashing (bcrypt), CORS (restricted origin, never wildcard+credentials), zero raw SQL anywhere in `app/` (grep-verified), file upload validation (MIME allowlist + size cap + randomized storage filename on every upload path), storage keys never present in any API schema (grep-verified), no secrets in source control (both `.env` files independently confirmed gitignored via `git check-ignore -v`, not just assumed from the pattern text), no hardcoded frontend secrets.
+- Added structured logging for every event category the spec names (auth register/login success+failure, assessment create/publish/publish-rejected, AI provider failures, PDF job completed/failed-validation/failed, background analytics-recalculation failures) — audited every `logger.*` call site afterward and confirmed none logs a password, hash, or token (emails are logged for auth audit trails, which is standard practice, not a leak).
+
+**Data seeding — substantially rewritten for section 35 compliance:**
+- Previous seed data (2 teachers, 3 batches, 15 students, 1 subject, ~20 responses) fell well short of section 35's explicit targets. Rewrote to: **3 teachers, 5 batches, 40 students, 2 subjects (Mathematics + Science, 6 topics total), 485 assessment responses, 600 attendance records** (15 days × 40 students), plus the existing hand-crafted three-student storyline (mastered/stable, declining, improving trajectories) preserved for narrative demo value. The bulk of the new data comes from `_bulk_quiz_rounds()`: a seeded (`random.Random(20260908)`, reproducible) per-student-per-topic aptitude generator with round-to-round drift, so trends emerge organically across the whole class rather than being hand-authored one student at a time.
+- Verified with a direct integrity check before touching `dev.db`: zero orphaned foreign keys, all 40 students have at least one attempt, row counts confirmed against every relevant table.
+
+**Documentation — all six new docs, plus the top-level README:**
+- `docs/architecture.md` — layering, the four provider/backend abstractions, why `BackgroundTasks` not Celery, why no microservices, both pipeline diagrams.
+- `docs/database.md` — every entity group, all 7 migrations, the one deliberate schema deviation from the spec (`response_selected_options`), why SQLite in dev.
+- `docs/api.md` — full endpoint reference by feature area, generated by cross-checking the live `/openapi.json` for accuracy rather than hand-transcribing from memory.
+- `docs/security.md` — the full audit above, plus an explicit "what a real deployment must change" checklist (JWT secret, API key, managed Postgres, real object storage, Redis-backed rate limiting, real CORS origin, TLS).
+- `docs/development.md` — setup, seeding, testing conventions, the full structured-logging table, and the deployment section (frontend/backend/Postgres/storage/Redis are all independently deployable; verified by re-checking every settings field is environment-driven, nothing hardcoded).
+- `README.md` — project overview, problem statement, features, architecture diagram, stack table, doc index, setup, engineering-decisions rationale (Postgres/FastAPI/Next.js/BackgroundTasks/topic-level-analytics/documented-mastery-model, each with its actual reason), and "what I'd prioritize next."
+
+**Process note:** `docs/ai-pipeline.md` and `docs/analytics.md` already existed from Phases 5 and 4 — not rewritten, only cross-referenced from the new docs.
+
+**Verified:**
+- `pytest` — 133/133 passing.
+- `npm run build` — succeeds, all 13 routes compile and type-check cleanly.
+- **Full section 34 demo flow walked through live against the real running server** (not just the automated test): fresh teacher creates a batch/subject/topic, publishes two assessments, a fresh student answers one correctly (100% mastery, no weak topic — confirming the pipeline doesn't manufacture a false weak topic) and one incorrectly (mastery drops to 45%, correctly appears on the Attention Panel), practice generation confirmed to gracefully 502 without an API key, then completed live via the same direct-DB-seed-bypass pattern established in Phases 5-6 — mastery moved 45% → 85% with the causation disclaimer attached, exactly as designed. All demo/test data deleted afterward and `dev.db` fully reset+reseeded to confirm a completely clean state (verified: exact expected row counts, zero leftover demo users).
+
+**What was deliberately deferred** (carried from earlier phases, restated here since this is the final phase):
+- **Parent role** (spec §3) — the `UserRole.PARENT` enum value exists so no schema migration is needed to add it, but no parent-facing endpoints or UI were built; explicitly out of MVP scope per the spec itself.
+- **Real Celery/RQ** and **real OCR** — both need infrastructure (working Docker/Redis, Tesseract/Poppler binaries) never available in this development environment across all 7 phases. Both have real, working code at the seam (`BackgroundTasks` call sites; the OCR fallback function) ready to swap in.
+- **Redis-backed rate limiting** and **real S3/R2 object storage** — same story; the abstractions exist, only the swappable implementation is missing.
+- **Pagination** on any list endpoint — untested need at this project's target scale (a single institute, a few hundred students).
+- **A student invite/credential-delivery flow** — a teacher-created student account currently gets a random, unrecoverable password (documented since Phase 1); a real deployment needs an invite-link or teacher-set-temporary-password flow.
+- **Partial credit / rubric-based subjective grading** — one score per subjective response today; fine for a solo tutor, would need standardization for a multi-teacher institute.
+
 ## 2026-09-12 — Phase 6: Personalization
 
 **Built:**

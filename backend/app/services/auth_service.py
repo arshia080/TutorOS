@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
@@ -5,10 +7,14 @@ from app.core.security import create_access_token, hash_password, verify_passwor
 from app.models.user import User
 from app.schemas.auth import LoginRequest, RegisterRequest
 
+logger = logging.getLogger(__name__)
+
 
 def register_user(db: Session, data: RegisterRequest) -> User:
     existing = db.query(User).filter(User.email == data.email).first()
     if existing is not None:
+        # Email only -- never log a password or password_hash anywhere in this module.
+        logger.info("Registration rejected (duplicate email): %s", data.email)
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already registered")
 
     user = User(
@@ -20,6 +26,7 @@ def register_user(db: Session, data: RegisterRequest) -> User:
     db.add(user)
     db.commit()
     db.refresh(user)
+    logger.info("User registered: id=%s email=%s role=%s", user.id, user.email, user.role.value)
     return user
 
 
@@ -29,7 +36,9 @@ def authenticate_user(db: Session, data: LoginRequest) -> User:
     )
     user = db.query(User).filter(User.email == data.email).first()
     if user is None or not verify_password(data.password, user.password_hash):
+        logger.warning("Login failed for email: %s", data.email)
         raise invalid_credentials
+    logger.info("User logged in: id=%s email=%s", user.id, user.email)
     return user
 
 

@@ -1,4 +1,5 @@
 import uuid
+from urllib.parse import quote
 
 from fastapi import HTTPException, UploadFile, status
 
@@ -46,3 +47,19 @@ async def save_upload(file: UploadFile) -> UploadedFile:
     return UploadedFile(
         storage_key=storage_key, file_name=display_name, mime_type=content_type, file_size=len(content)
     )
+
+
+def content_disposition(file_name: str) -> str:
+    """A user-controlled display filename is never safe to interpolate
+    directly into a header (quote/CRLF injection) -- this builds a
+    spec-compliant `Content-Disposition` value with both a stripped ASCII
+    fallback and an RFC 6266 percent-encoded `filename*` for exact names.
+    """
+    # Strip every ASCII control character (0x00-0x1F, 0x7F) -- not just quotes
+    # and backslashes -- so a filename can never inject a CR/LF and start a
+    # new header line.
+    ascii_fallback = "".join(
+        c for c in file_name.encode("ascii", "ignore").decode() if 0x20 <= ord(c) < 0x7F and c not in '"\\'
+    ) or "download"
+    encoded = quote(file_name, safe="")
+    return f'attachment; filename="{ascii_fallback}"; filename*=UTF-8\'\'{encoded}'

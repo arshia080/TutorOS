@@ -1,3 +1,4 @@
+import logging
 import uuid
 from datetime import datetime, timedelta, timezone
 
@@ -23,6 +24,8 @@ from app.models.subject import Subject
 from app.models.user import User, UserRole
 from app.schemas.assessment import AssessmentCreate, AssessmentUpdate, QuestionCreate, ResponseSubmit
 from app.services.question_validation import validate_option_shape
+
+logger = logging.getLogger(__name__)
 
 ASSESSMENT_NOT_FOUND = HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assessment not found")
 QUESTION_NOT_FOUND = HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Question not found")
@@ -58,6 +61,7 @@ def create_assessment(db: Session, teacher: User, data: AssessmentCreate) -> Ass
     db.add(assessment)
     db.commit()
     db.refresh(assessment)
+    logger.info("Assessment created: id=%s teacher_id=%s batch_id=%s", assessment.id, teacher.id, data.batch_id)
     return assessment
 
 
@@ -261,11 +265,13 @@ def publish_assessment(db: Session, teacher: User, assessment_id: uuid.UUID) -> 
 
     errors = validate_for_publish(db, assessment)
     if errors:
+        logger.info("Assessment publish rejected: id=%s errors=%d", assessment.id, len(errors))
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail={"errors": errors})
 
     assessment.status = AssessmentStatus.PUBLISHED
     db.commit()
     db.refresh(assessment)
+    logger.info("Assessment published: id=%s teacher_id=%s", assessment.id, teacher.id)
     return assessment
 
 

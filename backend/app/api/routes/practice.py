@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from app.ai.base import AIProvider
 from app.api.routes.ai import get_provider
 from app.core.deps import require_role
+from app.core.rate_limit import rate_limit
 from app.db.session import get_db
 from app.models.practice import PracticeSetStatus
 from app.models.subject import Topic
@@ -61,7 +62,12 @@ def _set_read(db: Session, ps) -> PracticeSetRead:
     )
 
 
-@router.post("/students/{student_id}/topics/{topic_id}/practice", response_model=PracticeSetRead, status_code=201)
+@router.post(
+    "/students/{student_id}/topics/{topic_id}/practice",
+    response_model=PracticeSetRead,
+    status_code=201,
+    dependencies=[Depends(rate_limit("ai_generate"))],
+)
 def generate_practice(
     student_id: uuid.UUID,
     topic_id: uuid.UUID,

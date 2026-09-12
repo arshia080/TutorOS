@@ -1,9 +1,10 @@
 import uuid
 from datetime import timedelta
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.celery_app import recalculate_after_attempt_task
 from app.core.deps import get_current_user, require_role
 from app.db.session import get_db
 from app.models.assessment import AssessmentStatus, AttemptStatus, Question
@@ -198,14 +199,13 @@ def submit_response(
 @router.post("/attempts/{attempt_id}/submit", response_model=AttemptRead)
 def submit_attempt(
     attempt_id: uuid.UUID,
-    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     student: User = Depends(require_student),
 ) -> AttemptRead:
     assessment, attempt = svc.finalize_attempt(db, student, attempt_id)
     topic_ids = analytics_service.topics_touched_by_assessment(db, assessment.id)
     if topic_ids:
-        background_tasks.add_task(analytics_service.recalculate_after_attempt, student.id, topic_ids)
+        recalculate_after_attempt_task.delay(str(student.id), [str(t) for t in topic_ids])
     return attempt
 
 
@@ -255,7 +255,6 @@ def grade_response(
     attempt_id: uuid.UUID,
     question_id: uuid.UUID,
     data: GradeRequest,
-    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     teacher: User = Depends(require_teacher),
 ) -> ResponseRead:
@@ -263,7 +262,7 @@ def grade_response(
     _assessment, attempt = svc.get_attempt_scoped(db, teacher, attempt_id)
     question = db.get(Question, question_id)
     if question is not None and question.topic_id is not None:
-        background_tasks.add_task(analytics_service.recalculate_after_attempt, attempt.student_id, [question.topic_id])
+        recalculate_after_attempt_task.delay(str(attempt.student_id), [str(question.topic_id)])
     return ResponseRead(
         question_id=response.question_id,
         selected_option_ids=[],

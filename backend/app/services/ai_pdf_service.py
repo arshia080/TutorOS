@@ -13,6 +13,7 @@ GET /ai/jobs/{id} for status, matching the spec's requirement either way.
 """
 
 import io
+import logging
 import uuid
 from datetime import datetime, timezone
 
@@ -24,6 +25,8 @@ from app.models.subject import Subject, Topic
 from app.schemas.ai import AIGeneratedQuestionSet
 from app.services.ai_validation import AIValidationError, validate_generated_question_set
 from app.storage import get_storage
+
+logger = logging.getLogger(__name__)
 
 MIN_EXTRACTABLE_CHARS = 20  # below this, pypdf likely got nothing useful -> try OCR
 TOOL_NAME = "return_extracted_questions"
@@ -167,6 +170,7 @@ def process_extraction_job(job_id: uuid.UUID) -> None:
             job.assessment_id = assessment.id
             job.completed_at = datetime.now(timezone.utc)
             db.commit()
+            logger.info("PDF extraction job completed: id=%s assessment_id=%s questions=%d", job.id, assessment.id, len(questions))
 
         except AIValidationError as e:
             db.rollback()
@@ -175,6 +179,7 @@ def process_extraction_job(job_id: uuid.UUID) -> None:
             job.error_message = "; ".join(e.errors)
             job.completed_at = datetime.now(timezone.utc)
             db.commit()
+            logger.warning("PDF extraction job failed validation: id=%s errors=%d", job.id, len(e.errors))
         except Exception as e:  # noqa: BLE001 -- background job: must never crash silently
             db.rollback()
             job = db.get(AIExtractionJob, job_id)
@@ -182,5 +187,6 @@ def process_extraction_job(job_id: uuid.UUID) -> None:
             job.error_message = str(e)
             job.completed_at = datetime.now(timezone.utc)
             db.commit()
+            logger.error("PDF extraction job failed: id=%s error=%s", job.id, e, exc_info=True)
     finally:
         db.close()

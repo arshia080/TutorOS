@@ -1,11 +1,13 @@
 import uuid
 
-from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
 
 import app.ai as ai_module
 from app.ai.base import AIProvider, AIProviderError
+from app.celery_app import process_extraction_job_task
 from app.core.deps import get_current_user, require_role
+from app.core.rate_limit import rate_limit
 from app.db.session import get_db
 from app.models.ai_job import AIExtractionJob
 from app.models.batch import Batch
@@ -26,7 +28,12 @@ def get_provider() -> AIProvider:
     return ai_module.get_ai_provider()
 
 
-@router.post("/generate-questions", response_model=AssessmentRead, status_code=201)
+@router.post(
+    "/generate-questions",
+    response_model=AssessmentRead,
+    status_code=201,
+    dependencies=[Depends(rate_limit("ai_generate"))],
+)
 def generate_questions(
     data: GenerateQuestionsRequest,
     db: Session = Depends(get_db),
@@ -36,7 +43,11 @@ def generate_questions(
     return ai_question_service.generate_questions(db, teacher, provider, data)
 
 
-@router.post("/assessments/{assessment_id}/questions/{question_id}/regenerate", response_model=dict)
+@router.post(
+    "/assessments/{assessment_id}/questions/{question_id}/regenerate",
+    response_model=dict,
+    dependencies=[Depends(rate_limit("ai_generate"))],
+)
 def regenerate_question(
     assessment_id: uuid.UUID,
     question_id: uuid.UUID,
@@ -50,9 +61,13 @@ def regenerate_question(
     return _question_read(db, question, include_correct=True).model_dump(mode="json")
 
 
-@router.post("/pdf-extract", response_model=PDFExtractionJobRead, status_code=202)
+@router.post(
+    "/pdf-extract",
+    response_model=PDFExtractionJobRead,
+    status_code=202,
+    dependencies=[Depends(rate_limit("ai_pdf"))],
+)
 async def extract_pdf(
-    background_tasks: BackgroundTasks,
     batch_id: uuid.UUID = Form(...),
     subject_id: uuid.UUID = Form(...),
     file: UploadFile = File(...),
@@ -73,7 +88,7 @@ async def extract_pdf(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Subject not found")
 
     job = ai_pdf_service.create_extraction_job(db, teacher, batch, db.get(Subject, subject_id), file.filename or "upload.pdf", content)
-    background_tasks.add_task(ai_pdf_service.process_extraction_job, job.id)
+    process_extraction_job_task.delay(str(job.id))
     return job
 
 
@@ -85,7 +100,11 @@ def get_job(job_id: uuid.UUID, db: Session = Depends(get_db), teacher: User = De
     return job
 
 
-@router.get("/students/{student_id}/topics/{topic_id}/insight", response_model=StudentInsightRead)
+@router.get(
+    "/students/{student_id}/topics/{topic_id}/insight",
+    response_model=StudentInsightRead,
+    dependencies=[Depends(rate_limit("ai_insight"))],
+)
 def get_student_insight(
     student_id: uuid.UUID,
     topic_id: uuid.UUID,

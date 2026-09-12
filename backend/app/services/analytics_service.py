@@ -13,6 +13,7 @@ See docs/analytics.md for the full methodology writeup. Summary:
   values (app/core/config.py), not literals buried in this file.
 """
 
+import logging
 import statistics
 import uuid
 from dataclasses import dataclass, field
@@ -28,6 +29,8 @@ from app.models.assessment import Assessment, AssessmentAttempt, AttemptStatus, 
 from app.models.batch import Batch, BatchStudent, BatchStudentStatus
 from app.models.subject import Topic
 from app.models.user import User
+
+logger = logging.getLogger(__name__)
 
 # Difficulty is a free-text column (see Question.difficulty); unrecognized or
 # missing values fall back to weight 1.0 (i.e. treated as EASY).
@@ -274,7 +277,11 @@ def recalculate_after_attempt(student_id: uuid.UUID, topic_ids: list[uuid.UUID])
     db = db_session_module.SessionLocal()
     try:
         for topic_id in topic_ids:
-            recalculate_topic(db, student_id, topic_id)
+            try:
+                recalculate_topic(db, student_id, topic_id)
+            except Exception:  # noqa: BLE001 -- background job: one bad topic must not block the rest
+                logger.error("Performance recalculation failed: student_id=%s topic_id=%s", student_id, topic_id, exc_info=True)
+                db.rollback()
     finally:
         db.close()
 

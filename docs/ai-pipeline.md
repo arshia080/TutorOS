@@ -99,7 +99,7 @@ store the PDF bytes via the storage abstraction (app/storage/, Phase 2)
     ▼
 create AIExtractionJob(status=PENDING), return 202 {job_id, status} IMMEDIATELY
     │
-    ▼  (FastAPI BackgroundTask, see "Why not Celery?" below)
+    ▼  (Celery task via Redis broker, see below)
 job.status = PROCESSING
     │
     ▼
@@ -139,18 +139,17 @@ somewhere to persist job status between the POST and the polling GETs. Same
 category of necessary addition as Phase 2's storage abstraction or Phase 4's
 `performance_snapshots`.
 
-### Why not Celery/RQ?
+### Celery + Redis
 
-The spec asks for a "background job (Celery/RQ)". This environment has no
-working Docker/Redis (see `docs/PROGRESS.md`, Phase 0 onward) — there's no way
-to actually run or test a real broker here. `BackgroundTasks` (stdlib-adjacent,
-built into FastAPI) gives the identical user-visible contract the spec
-actually cares about — **the triggering request returns immediately, the
-teacher polls a job id** — without infrastructure this phase can't verify end
-to end. `process_extraction_job()` is the single seam to swap for a real
-Celery task later (`background_tasks.add_task(...)` becomes
-`process_extraction_job.delay(...)`); nothing about its internals or the
-`AIExtractionJob` table would need to change.
+The spec asks for a "background job (Celery/RQ)". Phases 0-7 ran this via
+FastAPI's `BackgroundTasks` instead, since the development environment had no
+working Docker/Redis to build or test a real broker against at the time.
+Once Docker/Redis became available, `process_extraction_job()` became the
+task body of `@celery_app.task` (`app/celery_app.py`), and the call site
+became `process_extraction_job_task.delay(str(job.id))` — nothing about the
+function's internals or the `AIExtractionJob` table changed. Live-verified
+end to end: dispatched a real job over HTTP, watched it flow through the
+real Redis broker into a separate `celery worker` process and complete.
 
 One real bug surfaced and fixed while wiring this (same class of bug Phase 4
 hit with analytics recalculation): the background task must look up its DB
