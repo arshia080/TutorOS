@@ -1,5 +1,228 @@
 # Build Log
 
+## 2026-09-13 — Phase 8: Parent Portal (extends beyond original MVP scope)
+
+The original spec (§3) explicitly deferred the PARENT role but designed the
+schema (`UserRole.PARENT` already existed) so it could be added later without
+a rewrite. This phase adds it properly: registration, a verified parent-child
+linking flow, teacher discovery by locality, and an aggregated parent
+dashboard (mastery, syllabus completion, recent tests, teacher remarks).
+
+**Verification-flow decision (the highest-risk part of this phase):**
+Two linking paths were built, both ending at the same `parent_student_links`
+row, per the prompt's "either (a) or (b)" — both were implemented since the
+frontend spec explicitly asks for both actions ("Enter invite code" / "Request
+to connect"):
+1. **Invite code** (`link_invite_codes`, `created_by` always a teacher):
+   a teacher generates a one-time 8-character code scoped to one student
+   (`POST /teachers/students/{id}/invite-code`); a parent entering a
+   still-valid, unused code is linked with `status=APPROVED` **immediately** —
+   generating and handing over the code IS the teacher's approval, so a second
+   approval step would be pure friction with no added safety. Codes expire
+   after `settings.link_invite_code_expiry_hours` (default 24h) and can't be
+   reused once redeemed (`used_at` set).
+2. **Pending request** (no code): a parent who only knows the child's account
+   email submits it; this creates a `status=PENDING` row that a teacher who
+   actually teaches that student (verified via a real `BatchStudent`/`Batch`
+   join, not a trusted client-supplied flag) must explicitly approve or
+   reject via `GET/POST /teachers/link-requests`. Chose teacher-only approval
+   (not "or student" from the prompt's alternative) to keep the authorization
+   surface to one well-tested check rather than two; a student-approval path
+   would be a small, isolated addition later if needed.
+
+**The one authorization choke point**: `parent_service.get_approved_link()` —
+every single read of a child's data (`GET /parents/children/{id}/progress`)
+calls this first, and it only returns a link where `status == APPROVED`
+*for that specific parent*. A PENDING or REJECTED link, or no link at all,
+raises the same 404 "Child not found" a real stranger would get — never a
+403, so a request can't be used to confirm a given student id/email exists
+at all, following the same "404 not 403 to avoid resource enumeration"
+convention every other phase in this codebase already uses.
+
+**DB (migration `06316e98fd73`):** `parent_profiles`, `parent_student_links`
+(unique on `(parent_id, student_id)` — re-requesting after a REJECTED link
+updates the same row back to PENDING rather than erroring), `link_invite_codes`,
+`syllabus_progress` (unique on `(batch_id, subject_id, topic_id)`), `remarks`;
+plus `locality`/`city`/`pincode` added to the existing (previously-unpopulated)
+`teacher_profiles` table.
+
+**Backend:**
+- `RegisterRequest` gained optional `phone`/`locality` fields (ignored unless
+  `role == PARENT`); `register_user()` now also creates a `ParentProfile` row
+  for parent signups — the same "profile row created at registration" gap
+  that already existed for `TeacherProfile` is *not* fixed here (out of
+  scope for this phase; teachers now self-serve their own profile instead
+  via the new `PATCH /teachers/profile`, which was the actually-needed fix
+  for search to have any real data).
+- `app/services/parent_service.py` — the module docstring has the full flow
+  writeup above. `list_pending_requests_for_teacher()` filters PENDING links
+  down to only students the calling teacher actually teaches, so a teacher
+  never sees (or can act on) another teacher's parent requests — verified by
+  `test_teacher_cannot_approve_another_teachers_link_request`, which also
+  checks the *listing* itself, not just the approve endpoint.
+- `app/services/teacher_search_service.py` — `GET /teachers/search` needs no
+  auth at all (parents browsing don't need an account yet) and only ever
+  touches `teacher_profiles` + aggregate "which subjects/grades has this
+  teacher run assessments/batches for" facts, computed the same way analytics
+  already aggregates class data — never returns batch, assessment, or student
+  identifiers. `subjects_taught` is derived from distinct `Assessment.subject_id`
+  per teacher (subjects are a global catalog, not owned by a teacher, so this
+  was the only honest way to answer "what does this teacher teach" without a
+  new schema field); `grades_taught` from distinct `Batch.grade`.
+- `app/services/syllabus_service.py` — `mark_topic()` requires the batch to be
+  the teacher's own (reuses `batch_service.get_owned_batch`, same 404-not-403
+  pattern) and the topic to actually belong to the given subject; upserts one
+  row per `(batch, subject, topic)`. `list_syllabus()` returns every topic in
+  the subject with `NOT_STARTED` as the default for topics with no row yet,
+  so the checklist UI never has to special-case "untouched."
+- `app/services/remark_service.py` — `create_remark()` checks **both** that
+  the batch is the teacher's own AND that the student is enrolled in one of
+  the teacher's batches (via `student_service.get_student_for_teacher`) —
+  two separate ownership facts, not one, since a batch being the teacher's
+  doesn't by itself prove this particular student belongs to it.
+- Parent progress aggregation (`get_child_progress`) explicitly **reuses**
+  Phase 4's `analytics_service.compute_student_performance()` rather than
+  reimplementing mastery — converted from its dataclass return via
+  `StudentPerformanceRead.model_validate(performance, from_attributes=True)`
+  since this is a direct service-to-service call (not a FastAPI response
+  return), which is the one place in this call path that needed the explicit
+  `from_attributes=True` FastAPI's own response-model machinery normally
+  supplies for free.
+- Syllabus completion percentage = completed `syllabus_progress` rows for a
+  subject within the child's active batch(es) ÷ total `Topic` rows that exist
+  for that subject (topics are global, not batch-scoped) — a subject only
+  appears in a parent's view once a teacher has touched at least one of its
+  topics for that batch, so an untouched subject doesn't show as a
+  misleading 0%.
+- Routes: `app/api/routes/parents.py` (`POST /parents/link-requests`,
+  `GET /parents/children`, `GET /parents/children/{id}/progress`), new
+  endpoints on `app/api/routes/teachers.py` (`GET /teachers/search`,
+  `GET/PATCH /teachers/profile`, `GET /teachers/link-requests`,
+  `POST /teachers/link-requests/{id}/approve|reject`,
+  `POST /teachers/students/{id}/invite-code`), new
+  `app/api/routes/syllabus.py` (`POST /syllabus/{topic_id}/mark-complete`,
+  `GET /batches/{id}/subjects/{id}/syllabus` — the second wasn't in the
+  prompt's literal endpoint list but is necessary for the requested "syllabus
+  checklist UI" to have anything to render, same category of addition as
+  every prior phase's "the spec's UI ask implies an endpoint it didn't name"),
+  and two additions to `app/api/routes/students.py`
+  (`POST/GET /students/{id}/remarks` — GET wasn't literally requested either,
+  needed so the remarks form has a history to show against).
+
+**Tests (16 new, 149 total, all passing):** full link lifecycle both ways
+(invite-code instant approval, pending request → approve, pending request →
+reject with the rejected child's data never becoming visible), invite-code
+reuse rejected, invalid-code rejected, duplicate-pending-request rejected,
+unknown-email-request 404s, syllabus completion percentage hand-verified
+(1 of 4 topics complete → exactly 25.0%), teacher search filtering by
+locality/subject with an exact assertion on the response's field set (proving
+no extra/leaked fields), and every authorization "should fail" case named in
+the prompt as an explicit test expecting 403/404 rather than an incidental
+assertion: parent cannot reach a second child's progress by ID-guessing
+despite having a real approved link to a *different* child; a teacher cannot
+approve/reject another teacher's link request (and it doesn't even appear in
+that teacher's pending list); a teacher cannot mark syllabus progress for
+another teacher's batch; a teacher cannot add a remark for a student not in
+their own batch; a parent gets 403 attempting either teacher-only action;
+and a remark with `visible_to_parent=false` is confirmed absent from the
+parent's feed while still present in the teacher's own view of the same
+student.
+
+**Frontend:** parent role added to the register form (with conditional
+phone/locality fields); dashboard nav branches for `PARENT` (My Children,
+Find a Teacher) alongside the existing TEACHER/STUDENT branches; a
+`ParentOverview` on `/dashboard` listing linked children as cards (or an
+empty state prompting to link one) with a combined "enter code" / "request
+by email" form; `/dashboard/children/[id]` for the per-child aggregated view
+(mastery list reusing the same `TrendArrow` component the student/teacher
+dashboards already use, syllabus progress bars, a recent-tests table, a
+remarks feed); `/dashboard/find-teacher` (locality/subject/grade filters,
+result cards) — reachable without a completed child-link, matching "parents
+can search for tutors near them independent of any existing child link."
+**Frontend interpretation note**: the prompt's "Request to connect" action on
+a teacher search result implies a per-teacher connection request, but the
+backend (correctly, per its own explicit spec) only supports a parent→student
+link, not a parent→teacher one — there is no such thing as a "connect to this
+teacher" request in the data model. Rather than invent an unspecified
+backend capability, the search page's copy points parents to the existing
+"Link a child" flow (code or student email) instead of attaching a
+non-functional per-card button; documented here rather than silently doing
+something different from what was asked.
+Teacher-side additions: a "Parent link requests" panel on the teacher's
+`/dashboard` overview (approve/reject inline); a `/dashboard/students/[id]`
+page (new — students had no detail page before this phase) with the invite-code
+generator and a remarks list + add-remark form (category + visible-to-parent
+checkbox); `/dashboard/batches/[id]/syllabus` (subject picker + per-topic
+status dropdown, showing the live completed/total count).
+
+**Decisions:**
+- `ParentStudentLink.relationship` is a plain nullable string column, not an
+  enum — the prompt's own examples ("Father", "Mother", "Guardian") read as
+  suggestions, not an exhaustive real-world list (step-parents, grandparents
+  raising a child, etc.), and free text costs nothing here since it's display
+  metadata, not something queried on.
+- No student-side approval path was built (only teacher-side), even though
+  the prompt offered it as an alternative — see the verification-flow
+  decision above.
+- `teacher_profiles` rows are still not created automatically for teachers
+  (pre-existing gap, unrelated to this phase) — a teacher must visit their
+  profile settings and save once before they're discoverable in search. Not
+  fixed here since Phase 8's actual ask was the search capability, not
+  retroactively backfilling every existing teacher's profile.
+- Reseeded `dev.db`'s Postgres tables from scratch (`TRUNCATE ... RESTART
+  IDENTITY CASCADE` on every app table, then `python -m scripts.seed`) rather
+  than writing a migration-time backfill, since seed data is regenerated
+  wholesale on every phase anyway. New seed data: one searchable teacher
+  profile (Priya Nair, "Nair Learning Center", Andheri West, Mumbai), 3
+  topics of syllabus progress on batch 0 (2 completed, 1 in progress),
+  3 remarks on Rahul Sharma (2 visible to parents, 1 deliberately not, to
+  demo the filter immediately), one fully APPROVED parent link (Sunita
+  Sharma → Rahul Sharma, via the invite-code flow) and one PENDING link
+  (Rajesh Singh → a batch-0 storyline student) so the teacher's Link
+  Requests panel has something to act on out of the box.
+
+**Verified:**
+- `pytest` — 149/149 passing (133 prior + 16 new).
+- `npm run build` — succeeds; all 6 new routes (`/dashboard/find-teacher`,
+  `/dashboard/children/[id]`, `/dashboard/students/[id]`,
+  `/dashboard/batches/[id]/syllabus`, plus the extended register/dashboard
+  pages) compile and type-check cleanly on the first pass.
+- **Live-verified against the real running dev server and Postgres** (not
+  just the test suite): registered a real parent and teacher over HTTP,
+  created a batch+student, generated a real invite code, redeemed it as the
+  parent (got `status: APPROVED` back immediately), confirmed `GET
+  /parents/children` and `GET /parents/children/{id}/progress` both return
+  real data over HTTP; separately updated a teacher's profile via `PATCH
+  /teachers/profile` and confirmed `GET /teachers/search?locality=...`
+  finds it with no auth token at all. All live-test users/batches deleted
+  afterward via direct SQL cleanup to keep the dev database matching the
+  seed script's baseline. Then fully reseeded and re-verified the *seeded*
+  Phase 8 data specifically: `sunita.sharma@tutoros.dev` (password
+  `password123`) sees Rahul's real Phase-4-computed mastery numbers
+  (`overall_mastery: 74.86`, matching the existing storyline data
+  unchanged), his 66.67% Mathematics syllabus completion (2 of 3 topics),
+  and exactly 2 of his 3 remarks (the `visible_to_parent=false` one
+  correctly absent); `priya.nair@tutoros.dev` sees the pending Rajesh Singh
+  request on her dashboard and finds herself via `/teachers/search?locality=Andheri`.
+- One real environment issue hit and fixed **during** this phase's live
+  verification, unrelated to the code itself: `uvicorn --reload`'s
+  WatchFiles-based reloader left orphaned `multiprocessing.spawn` child
+  processes holding the listening socket after several restarts on this
+  Windows machine, so curl kept hitting a stale pre-Phase-8 process despite
+  every log line claiming a clean reload. Diagnosed by comparing a direct
+  `python -c "from app.main import app; print(len(app.routes))"` (correct,
+  80 routes) against the live server's `/openapi.json` (stale, 47 routes);
+  fixed by killing every orphaned `python.exe` process and restarting
+  **without** `--reload` for the rest of this session's verification.
+- Not yet exercised in a real browser (no headless browser in this
+  environment, consistent with every prior phase) — the parent dashboard's
+  card layout, the syllabus checklist's dropdown-per-topic UI, and the
+  search page's result cards are implemented and API-verified but not
+  visually confirmed.
+
+**This phase stops here for review before any of it goes near a real
+deployment**, per the explicit instruction — no further phases were started.
+
 ## 2026-09-12 — Post-Phase-7: Docker unblocked, real Celery/Redis/S3
 
 Docker Desktop, previously broken across this project's entire development

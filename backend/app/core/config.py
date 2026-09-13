@@ -60,5 +60,8 @@ class Settings(BaseSettings):
     # per minute. See app/core/rate_limit.py.
     ai_rate_limit_per_minute: int = 10
 
+    # How long a teacher-generated parent/student link invite code stays valid.
+    link_invite_code_expiry_hours: int = 24
+
 
 settings = Settings()

@@ -10,9 +10,11 @@ from app.api.routes import (
     batches,
     health,
     homework,
+    parents,
     practice,
     students,
     subjects,
+    syllabus,
     teachers,
 )
 from app.core.config import settings
@@ -41,7 +43,9 @@ app.include_router(assessments.router)
 app.include_router(attendance.router)
 app.include_router(batches.router)
 app.include_router(homework.router)
+app.include_router(parents.router)
 app.include_router(practice.router)
 app.include_router(students.router)
 app.include_router(subjects.router)
+app.include_router(syllabus.router)
 app.include_router(teachers.router)

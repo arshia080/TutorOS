@@ -4,7 +4,8 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.core.security import create_access_token, hash_password, verify_password
-from app.models.user import User
+from app.models.parent import ParentProfile
+from app.models.user import User, UserRole
 from app.schemas.auth import LoginRequest, RegisterRequest
 
 logger = logging.getLogger(__name__)
@@ -24,6 +25,11 @@ def register_user(db: Session, data: RegisterRequest) -> User:
         role=data.role,
     )
     db.add(user)
+    db.flush()
+
+    if user.role == UserRole.PARENT:
+        db.add(ParentProfile(user_id=user.id, phone=data.phone, locality=data.locality))
+
     db.commit()
     db.refresh(user)
     logger.info("User registered: id=%s email=%s role=%s", user.id, user.email, user.role.value)

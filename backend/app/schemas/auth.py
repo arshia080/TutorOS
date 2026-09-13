@@ -9,6 +9,9 @@ class RegisterRequest(BaseModel):
     email: EmailStr
     password: str = Field(min_length=8, max_length=128)
     role: UserRole = UserRole.STUDENT
+    # Only used when role == PARENT; ignored otherwise.
+    phone: str | None = Field(default=None, max_length=30)
+    locality: str | None = Field(default=None, max_length=255)
 
 
 class LoginRequest(BaseModel):

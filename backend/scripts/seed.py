@@ -31,6 +31,16 @@ from app.models.assessment import (
 )
 from app.models.batch import Batch, BatchStudent
 from app.models.homework import Homework, HomeworkSubmission, SubmissionStatus
+from app.models.parent import (
+    LinkStatus,
+    ParentProfile,
+    ParentStudentLink,
+    Remark,
+    RemarkCategory,
+    SyllabusProgress,
+    SyllabusStatus,
+)
+from app.models.profile import TeacherProfile
 from app.models.subject import Subject, Topic
 from app.models.user import User, UserRole
 
@@ -370,6 +380,58 @@ def seed() -> None:
                     )
                 )
 
+        # --- Phase 8: Parent Portal demo data ---------------------------------
+        # Teacher-discoverable profile for the primary teacher (search-by-locality demo).
+        db.add(
+            TeacherProfile(
+                user_id=teacher_users[0].id,
+                institute_name="Nair Learning Center",
+                bio="15 years teaching CBSE Mathematics, specializing in board-exam prep.",
+                locality="Andheri West",
+                city="Mumbai",
+                pincode="400058",
+            )
+        )
+
+        # Syllabus progress for batch 0 / Mathematics: a realistic mixed state
+        # (some chapters done, one in progress, one untouched) for the
+        # syllabus-percentage demo in both the teacher checklist and parent view.
+        db.add(SyllabusProgress(batch_id=batches[0].id, subject_id=math_subject.id, topic_id=math_topics["Algebra"].id, status=SyllabusStatus.COMPLETED, completed_at=now - timedelta(days=20), marked_by=teacher_users[0].id))
+        db.add(SyllabusProgress(batch_id=batches[0].id, subject_id=math_subject.id, topic_id=math_topics["Geometry"].id, status=SyllabusStatus.COMPLETED, completed_at=now - timedelta(days=8), marked_by=teacher_users[0].id))
+        db.add(SyllabusProgress(batch_id=batches[0].id, subject_id=math_subject.id, topic_id=math_topics["Trigonometry"].id, status=SyllabusStatus.IN_PROGRESS, marked_by=teacher_users[0].id, notes="Started basic identities this week."))
+
+        # Remarks on Rahul (storyline student) -- one parent-visible, one not,
+        # to demonstrate the visibility filter in both dashboards.
+        db.add(Remark(student_id=rahul.id, teacher_id=teacher_users[0].id, batch_id=batches[0].id, remark_text="Consistently strong in Algebra; keep up the practice pace.", category=RemarkCategory.ACADEMIC, visible_to_parent=True, created_at=now - timedelta(days=5)))
+        db.add(Remark(student_id=rahul.id, teacher_id=teacher_users[0].id, batch_id=batches[0].id, remark_text="Needs to focus more during Geometry sessions -- talks out of turn.", category=RemarkCategory.BEHAVIOR, visible_to_parent=True, created_at=now - timedelta(days=2)))
+        db.add(Remark(student_id=rahul.id, teacher_id=teacher_users[0].id, batch_id=batches[0].id, remark_text="Internal note: flagged for scholarship review, don't mention to family yet.", category=RemarkCategory.GENERAL, visible_to_parent=False, created_at=now - timedelta(days=1)))
+
+        # Two parents: one fully approved (via invite code, demonstrating the
+        # instant-link flow) linked to Rahul, one still PENDING on Ishita so the
+        # teacher's Link Requests panel has something to act on out of the box.
+        parent_rahul = User(name="Sunita Sharma", email="sunita.sharma@tutoros.dev", password_hash=hash_password("password123"), role=UserRole.PARENT)
+        db.add(parent_rahul)
+        db.flush()
+        db.add(ParentProfile(user_id=parent_rahul.id, phone="+91-98765-43210", locality="Andheri West"))
+        db.add(
+            ParentStudentLink(
+                parent_id=parent_rahul.id, student_id=rahul.id, relationship="Mother",
+                status=LinkStatus.APPROVED, requested_at=now - timedelta(days=10),
+                approved_at=now - timedelta(days=10), approved_by=teacher_users[0].id,
+            )
+        )
+
+        parent_ishita = User(name="Rajesh Singh", email="rajesh.singh@tutoros.dev", password_hash=hash_password("password123"), role=UserRole.PARENT)
+        db.add(parent_ishita)
+        db.flush()
+        db.add(ParentProfile(user_id=parent_ishita.id, phone="+91-98765-11111", locality="Andheri West"))
+        db.add(
+            ParentStudentLink(
+                parent_id=parent_ishita.id, student_id=ishita.id, relationship="Father",
+                status=LinkStatus.PENDING, requested_at=now - timedelta(hours=6),
+            )
+        )
+
         db.commit()
         print(f"Seeded {len(teacher_users)} teachers, {len(batches)} batches, {len(STUDENT_NAMES)} students.")
         print(f"Seeded 2 subjects (Mathematics, Science), {sum(len(t) for t in topics_by_subject.values())} topics.")
@@ -377,6 +439,8 @@ def seed() -> None:
         print("Seeded 1 mixed-question-type assessment plus 4 rounds of hand-crafted storyline quizzes.")
         print(f"Seeded {total_responses}+ additional randomized class-test responses across all batches (hundreds total).")
         print("Seeded 15 days of attendance for every student.")
+        print("Seeded Phase 8 parent portal data: 1 teacher profile (searchable), syllabus progress for 3 topics,")
+        print(f"3 remarks (1 hidden from parents), 1 approved parent link (Sunita Sharma -> Rahul), 1 pending link (Rajesh Singh -> {ishita.name}).")
         print("All accounts use password: password123")
     finally:
         db.close()

@@ -1,7 +1,8 @@
 "use client";
 
 import { use, useEffect, useState } from "react";
-import { UserPlus, Users } from "lucide-react";
+import Link from "next/link";
+import { UserPlus, Users, ListChecks } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -85,10 +86,23 @@ export default function BatchDetailPage({ params }: { params: Promise<{ id: stri
         }
         icon={Users}
         action={
-          <Button className="gap-1.5" onClick={() => setShowForm((v) => !v)}>
-            {!showForm && <UserPlus className="size-4" />}
-            {showForm ? "Cancel" : "Add student"}
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              className="gap-1.5"
+              nativeButton={false}
+              render={
+                <Link href={`/dashboard/batches/${id}/syllabus`}>
+                  <ListChecks className="size-4" />
+                  Syllabus
+                </Link>
+              }
+            />
+            <Button className="gap-1.5" onClick={() => setShowForm((v) => !v)}>
+              {!showForm && <UserPlus className="size-4" />}
+              {showForm ? "Cancel" : "Add student"}
+            </Button>
+          </div>
         }
       />
 
@@ -150,7 +164,11 @@ export default function BatchDetailPage({ params }: { params: Promise<{ id: stri
               <TableBody>
                 {students.map((s) => (
                   <TableRow key={s.student_id}>
-                    <TableCell className="font-medium">{s.name}</TableCell>
+                    <TableCell className="font-medium">
+                      <Link href={`/dashboard/students/${s.student_id}`} className="hover:text-primary">
+                        {s.name}
+                      </Link>
+                    </TableCell>
                     <TableCell className="text-muted-foreground">{s.email}</TableCell>
                     <TableCell>
                       <Badge variant={s.status === "ACTIVE" ? "default" : "secondary"}>{s.status}</Badge>

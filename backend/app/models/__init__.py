@@ -13,6 +13,16 @@ from app.models.assessment import (
 )
 from app.models.batch import Batch, BatchStudent, BatchStudentStatus
 from app.models.homework import Homework, HomeworkAttachment, HomeworkSubmission, SubmissionStatus
+from app.models.parent import (
+    LinkInviteCode,
+    LinkStatus,
+    ParentProfile,
+    ParentStudentLink,
+    Remark,
+    RemarkCategory,
+    SyllabusProgress,
+    SyllabusStatus,
+)
 from app.models.practice import (
     PracticeQuestion,
     PracticeQuestionOption,
@@ -62,4 +72,12 @@ __all__ = [
     "PracticeResponse",
     "Recommendation",
     "RecommendationStatus",
+    "ParentProfile",
+    "ParentStudentLink",
+    "LinkStatus",
+    "LinkInviteCode",
+    "SyllabusProgress",
+    "SyllabusStatus",
+    "Remark",
+    "RemarkCategory",
 ]

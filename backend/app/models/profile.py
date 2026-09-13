@@ -17,6 +17,9 @@ class TeacherProfile(Base):
     )
     institute_name: Mapped[str | None] = mapped_column(String(255))
     bio: Mapped[str | None] = mapped_column(Text)
+    locality: Mapped[str | None] = mapped_column(String(255), index=True)
+    city: Mapped[str | None] = mapped_column(String(255), index=True)
+    pincode: Mapped[str | None] = mapped_column(String(20))
     created_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(timezone.utc))
 
 

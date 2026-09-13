@@ -78,10 +78,16 @@ async function requestForm<T>(path: string, method: string, formData: FormData):
   return response.json() as Promise<T>;
 }
 
-export function register(name: string, email: string, password: string, role: UserRole = "STUDENT") {
+export function register(
+  name: string,
+  email: string,
+  password: string,
+  role: UserRole = "STUDENT",
+  extra: { phone?: string; locality?: string } = {},
+) {
   return request<TokenResponse>("/auth/register", {
     method: "POST",
-    body: JSON.stringify({ name, email, password, role }),
+    body: JSON.stringify({ name, email, password, role, ...extra }),
   });
 }
 
@@ -173,6 +179,10 @@ export function addStudentToBatch(batchId: string, data: { name: string; email: 
 
 export function listStudents() {
   return request<Student[]>("/students", {}, true);
+}
+
+export function getStudent(studentId: string) {
+  return request<Student>(`/students/${studentId}`, {}, true);
 }
 
 export function listSubjects() {
@@ -684,4 +694,198 @@ export function submitPracticeResponse(
 
 export function completePracticeSet(practiceSetId: string) {
   return request<PracticeCompletion>(`/practice-sets/${practiceSetId}/complete`, { method: "POST" }, true);
+}
+
+// ---------------------------------------------------------------------------
+// Parent Portal (Phase 8)
+// ---------------------------------------------------------------------------
+
+export interface TeacherProfile {
+  institute_name: string | null;
+  bio: string | null;
+  locality: string | null;
+  city: string | null;
+  pincode: string | null;
+}
+
+export interface TeacherSearchResult {
+  teacher_id: string;
+  name: string;
+  institute_name: string | null;
+  bio: string | null;
+  locality: string | null;
+  city: string | null;
+  subjects: string[];
+  grades: string[];
+}
+
+export function searchTeachers(filters: { locality?: string; subject?: string; grade?: string }) {
+  const params = new URLSearchParams();
+  if (filters.locality) params.set("locality", filters.locality);
+  if (filters.subject) params.set("subject", filters.subject);
+  if (filters.grade) params.set("grade", filters.grade);
+  const qs = params.toString();
+  return request<TeacherSearchResult[]>(`/teachers/search${qs ? `?${qs}` : ""}`);
+}
+
+export function getMyTeacherProfile() {
+  return request<TeacherProfile>("/teachers/profile", {}, true);
+}
+
+export function updateMyTeacherProfile(data: Partial<TeacherProfile>) {
+  return request<TeacherProfile>("/teachers/profile", { method: "PATCH", body: JSON.stringify(data) }, true);
+}
+
+export type LinkStatus = "PENDING" | "APPROVED" | "REJECTED";
+
+export interface LinkRequest {
+  id: string;
+  parent_id: string;
+  student_id: string;
+  relationship: string | null;
+  status: LinkStatus;
+  requested_at: string;
+  approved_at: string | null;
+}
+
+export interface PendingLinkRequest {
+  id: string;
+  parent_name: string;
+  parent_email: string;
+  student_id: string;
+  student_name: string;
+  relationship: string | null;
+  requested_at: string;
+}
+
+export interface InviteCode {
+  code: string;
+  student_id: string;
+  expires_at: string;
+}
+
+export function createLinkRequestByCode(code: string, relationship?: string) {
+  return request<LinkRequest>(
+    "/parents/link-requests",
+    { method: "POST", body: JSON.stringify({ code, relationship }) },
+    true,
+  );
+}
+
+export function createLinkRequestByEmail(studentEmail: string, relationship?: string) {
+  return request<LinkRequest>(
+    "/parents/link-requests",
+    { method: "POST", body: JSON.stringify({ student_email: studentEmail, relationship }) },
+    true,
+  );
+}
+
+export function listPendingLinkRequests() {
+  return request<PendingLinkRequest[]>("/teachers/link-requests", {}, true);
+}
+
+export function approveLinkRequest(linkId: string) {
+  return request<LinkRequest>(`/teachers/link-requests/${linkId}/approve`, { method: "POST" }, true);
+}
+
+export function rejectLinkRequest(linkId: string) {
+  return request<LinkRequest>(`/teachers/link-requests/${linkId}/reject`, { method: "POST" }, true);
+}
+
+export function generateInviteCode(studentId: string) {
+  return request<InviteCode>(`/teachers/students/${studentId}/invite-code`, { method: "POST" }, true);
+}
+
+export interface Child {
+  student_id: string;
+  name: string;
+  email: string;
+  grade: string | null;
+  relationship: string | null;
+  linked_since: string | null;
+}
+
+export interface SyllabusSubjectProgress {
+  subject_id: string;
+  subject_name: string;
+  total_topics: number;
+  completed_topics: number;
+  percentage: number;
+}
+
+export interface RecentTestResult {
+  assessment_id: string;
+  title: string;
+  total_marks: number;
+  score: number | null;
+  submitted_at: string | null;
+}
+
+export type RemarkCategory = "ACADEMIC" | "BEHAVIOR" | "ATTENDANCE" | "GENERAL";
+
+export interface Remark {
+  id: string;
+  teacher_name: string;
+  batch_id: string;
+  remark_text: string;
+  category: RemarkCategory;
+  created_at: string;
+}
+
+export interface ChildProgress {
+  student_id: string;
+  student_name: string;
+  performance: StudentPerformance;
+  syllabus: SyllabusSubjectProgress[];
+  recent_tests: RecentTestResult[];
+  remarks: Remark[];
+}
+
+export function listChildren() {
+  return request<Child[]>("/parents/children", {}, true);
+}
+
+export function getChildProgress(studentId: string) {
+  return request<ChildProgress>(`/parents/children/${studentId}/progress`, {}, true);
+}
+
+export type SyllabusStatus = "NOT_STARTED" | "IN_PROGRESS" | "COMPLETED";
+
+export interface SyllabusTopic {
+  topic_id: string;
+  topic_name: string;
+  status: SyllabusStatus;
+  completed_at: string | null;
+  notes: string | null;
+}
+
+export function getSyllabus(batchId: string, subjectId: string) {
+  return request<SyllabusTopic[]>(`/batches/${batchId}/subjects/${subjectId}/syllabus`, {}, true);
+}
+
+export function markSyllabusTopic(
+  topicId: string,
+  data: { batch_id: string; subject_id: string; status: SyllabusStatus; notes?: string },
+) {
+  return request<SyllabusTopic>(`/syllabus/${topicId}/mark-complete`, { method: "POST", body: JSON.stringify(data) }, true);
+}
+
+export interface TeacherRemark {
+  id: string;
+  batch_id: string;
+  remark_text: string;
+  category: RemarkCategory;
+  visible_to_parent: boolean;
+  created_at: string;
+}
+
+export function createRemark(
+  studentId: string,
+  data: { batch_id: string; remark_text: string; category: RemarkCategory; visible_to_parent: boolean },
+) {
+  return request<TeacherRemark>(`/students/${studentId}/remarks`, { method: "POST", body: JSON.stringify(data) }, true);
+}
+
+export function listRemarksForStudent(studentId: string) {
+  return request<TeacherRemark[]>(`/students/${studentId}/remarks`, {}, true);
 }

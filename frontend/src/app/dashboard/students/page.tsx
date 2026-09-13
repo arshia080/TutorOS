@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { GraduationCap } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -54,7 +55,11 @@ export default function StudentsPage() {
             <TableBody>
               {students.map((s) => (
                 <TableRow key={s.id}>
-                  <TableCell className="font-medium">{s.name}</TableCell>
+                  <TableCell className="font-medium">
+                    <Link href={`/dashboard/students/${s.id}`} className="hover:text-primary">
+                      {s.name}
+                    </Link>
+                  </TableCell>
                   <TableCell className="text-muted-foreground">{s.email}</TableCell>
                   <TableCell className="text-muted-foreground">{s.grade ?? "—"}</TableCell>
                 </TableRow>

@@ -6,8 +6,9 @@ from sqlalchemy.orm import Session
 from app.core.deps import get_current_user, require_role
 from app.db.session import get_db
 from app.models.user import User, UserRole
+from app.schemas.parent import RemarkCreate, TeacherRemarkRead
 from app.schemas.student import StudentRead
-from app.services import student_service
+from app.services import remark_service, student_service
 
 router = APIRouter(prefix="/students", tags=["students"])
 require_teacher = require_role(UserRole.TEACHER)
@@ -49,3 +50,24 @@ def get_student(
 
     student = student_service.get_student_for_teacher(db, current_user, student_id)
     return _to_student_read(db, student)
+
+
+@router.post("/{student_id}/remarks", response_model=TeacherRemarkRead, status_code=201)
+def add_remark(
+    student_id: uuid.UUID,
+    data: RemarkCreate,
+    db: Session = Depends(get_db),
+    teacher: User = Depends(require_teacher),
+) -> TeacherRemarkRead:
+    remark = remark_service.create_remark(db, teacher, student_id, data)
+    return TeacherRemarkRead.model_validate(remark)
+
+
+@router.get("/{student_id}/remarks", response_model=list[TeacherRemarkRead])
+def list_remarks(
+    student_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    teacher: User = Depends(require_teacher),
+) -> list[TeacherRemarkRead]:
+    remarks = remark_service.list_remarks_for_teacher(db, teacher, student_id)
+    return [TeacherRemarkRead.model_validate(r) for r in remarks]

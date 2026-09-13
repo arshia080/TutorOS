@@ -21,6 +21,11 @@ const STUDENT_NAV_ITEMS = [
   { href: "/dashboard/assessments", label: "Tests" },
 ];
 
+const PARENT_NAV_ITEMS = [
+  { href: "/dashboard", label: "My Children" },
+  { href: "/dashboard/find-teacher", label: "Find a Teacher" },
+];
+
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
   const pathname = usePathname();
@@ -32,7 +37,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   if (!user) return null;
 
-  const navItems = user.role === "TEACHER" ? TEACHER_NAV_ITEMS : STUDENT_NAV_ITEMS;
+  const navItems =
+    user.role === "TEACHER" ? TEACHER_NAV_ITEMS : user.role === "PARENT" ? PARENT_NAV_ITEMS : STUDENT_NAV_ITEMS;
 
   return (
     <div className="flex min-h-screen">

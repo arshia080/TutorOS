@@ -16,6 +16,8 @@ export default function RegisterPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<UserRole>("STUDENT");
+  const [phone, setPhone] = useState("");
+  const [locality, setLocality] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -24,7 +26,13 @@ export default function RegisterPage() {
     setError(null);
     setLoading(true);
     try {
-      const result = await register(name, email, password, role);
+      const result = await register(
+        name,
+        email,
+        password,
+        role,
+        role === "PARENT" ? { phone: phone || undefined, locality: locality || undefined } : {},
+      );
       setToken(result.access_token);
       router.push("/dashboard");
     } catch (err) {
@@ -103,8 +111,21 @@ export default function RegisterPage() {
                 >
                   <option value="STUDENT">Student</option>
                   <option value="TEACHER">Teacher</option>
+                  <option value="PARENT">Parent</option>
                 </select>
               </div>
+              {role === "PARENT" && (
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="phone">Phone (optional)</Label>
+                    <Input id="phone" value={phone} onChange={(e) => setPhone(e.target.value)} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="locality">Locality (optional)</Label>
+                    <Input id="locality" value={locality} onChange={(e) => setLocality(e.target.value)} />
+                  </div>
+                </>
+              )}
               {error && <p className="text-sm text-destructive">{error}</p>}
               <Button type="submit" className="w-full" disabled={loading}>
                 {loading ? "Creating account..." : "Create account"}
