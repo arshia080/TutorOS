@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { ClipboardCheck, Sparkles, Upload, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -10,6 +11,9 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { PageHeader } from "@/components/page-header";
+import { ErrorBanner } from "@/components/error-banner";
+import { EmptyState } from "@/components/empty-state";
 import { useAuth } from "@/lib/use-auth";
 import {
   listAssessments,
@@ -89,46 +93,59 @@ function TeacherAssessmentsView() {
   }
 
   return (
-    <div>
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Assessments</h1>
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            onClick={() => {
-              setShowPdfForm((v) => !v);
-              setShowAIForm(false);
-              setShowForm(false);
-            }}
-          >
-            {showPdfForm ? "Cancel" : "Upload PDF"}
-          </Button>
-          <Button
-            variant="outline"
-            onClick={() => {
-              setShowAIForm((v) => !v);
-              setShowPdfForm(false);
-              setShowForm(false);
-            }}
-          >
-            {showAIForm ? "Cancel" : "Generate with AI"}
-          </Button>
-          <Button
-            onClick={() => {
-              setShowForm((v) => !v);
-              setShowAIForm(false);
-              setShowPdfForm(false);
-            }}
-          >
-            {showForm ? "Cancel" : "New Assessment"}
-          </Button>
-        </div>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        title="Assessments"
+        description="Build, generate, and publish tests for your batches."
+        icon={ClipboardCheck}
+        action={
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              className="gap-1.5"
+              onClick={() => {
+                setShowPdfForm((v) => !v);
+                setShowAIForm(false);
+                setShowForm(false);
+              }}
+            >
+              <Upload className="size-4" />
+              {showPdfForm ? "Cancel" : "Upload PDF"}
+            </Button>
+            <Button
+              variant="outline"
+              className="gap-1.5"
+              onClick={() => {
+                setShowAIForm((v) => !v);
+                setShowPdfForm(false);
+                setShowForm(false);
+              }}
+            >
+              <Sparkles className="size-4" />
+              {showAIForm ? "Cancel" : "Generate with AI"}
+            </Button>
+            <Button
+              className="gap-1.5"
+              onClick={() => {
+                setShowForm((v) => !v);
+                setShowAIForm(false);
+                setShowPdfForm(false);
+              }}
+            >
+              {!showForm && <Plus className="size-4" />}
+              {showForm ? "Cancel" : "New assessment"}
+            </Button>
+          </div>
+        }
+      />
 
       {showAIForm && (
-        <Card className="mt-4 max-w-lg">
+        <Card className="max-w-lg border-0 shadow-sm ring-1 ring-border">
           <CardHeader>
-            <CardTitle className="text-base">Generate questions with AI</CardTitle>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Sparkles className="size-4 text-primary" />
+              Generate questions with AI
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <AIGenerateForm />
@@ -137,9 +154,12 @@ function TeacherAssessmentsView() {
       )}
 
       {showPdfForm && (
-        <Card className="mt-4 max-w-lg">
+        <Card className="max-w-lg border-0 shadow-sm ring-1 ring-border">
           <CardHeader>
-            <CardTitle className="text-base">Extract questions from a PDF</CardTitle>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Upload className="size-4 text-primary" />
+              Extract questions from a PDF
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <PDFUploadForm />
@@ -148,7 +168,7 @@ function TeacherAssessmentsView() {
       )}
 
       {showForm && (
-        <Card className="mt-4 max-w-lg">
+        <Card className="max-w-lg border-0 shadow-sm ring-1 ring-border">
           <CardHeader>
             <CardTitle className="text-base">Create assessment</CardTitle>
           </CardHeader>
@@ -214,7 +234,7 @@ function TeacherAssessmentsView() {
                   />
                 </div>
               </div>
-              {formError && <p className="text-sm text-red-600">{formError}</p>}
+              {formError && <ErrorBanner message={formError} />}
               <Button type="submit" disabled={submitting || !batchId || !subjectId}>
                 {submitting ? "Creating..." : "Create and add questions"}
               </Button>
@@ -223,8 +243,8 @@ function TeacherAssessmentsView() {
         </Card>
       )}
 
-      <div className="mt-6 space-y-2">
-        {error && <p className="text-sm text-red-600">{error}</p>}
+      <div className="space-y-2">
+        {error && <ErrorBanner message={error} />}
         {!error && assessments === null && (
           <>
             <Skeleton className="h-16 w-full" />
@@ -232,14 +252,14 @@ function TeacherAssessmentsView() {
           </>
         )}
         {assessments !== null && assessments.length === 0 && !error && (
-          <p className="text-sm text-muted-foreground">No assessments yet.</p>
+          <EmptyState icon={ClipboardCheck} title="No assessments yet" />
         )}
         {assessments?.map((a) => (
           <Link key={a.id} href={`/dashboard/assessments/${a.id}`}>
-            <Card className="transition-colors hover:bg-muted/50">
+            <Card className="border-0 shadow-sm ring-1 ring-border transition-shadow hover:shadow-md">
               <CardContent className="flex items-center justify-between py-4">
                 <div>
-                  <p className="font-medium">{a.title}</p>
+                  <p className="font-medium text-foreground">{a.title}</p>
                   <p className="text-sm text-muted-foreground">
                     {a.duration_minutes} min · {a.total_marks} marks
                   </p>
@@ -265,11 +285,11 @@ function StudentAssessmentsView() {
   }, []);
 
   return (
-    <div>
-      <h1 className="text-2xl font-semibold">Tests</h1>
+    <div className="space-y-6">
+      <PageHeader title="Tests" description="Assessments assigned to you." icon={ClipboardCheck} />
 
-      <div className="mt-6 space-y-2">
-        {error && <p className="text-sm text-red-600">{error}</p>}
+      <div className="space-y-2">
+        {error && <ErrorBanner message={error} />}
         {!error && assessments === null && (
           <>
             <Skeleton className="h-16 w-full" />
@@ -277,25 +297,28 @@ function StudentAssessmentsView() {
           </>
         )}
         {assessments !== null && assessments.length === 0 && !error && (
-          <p className="text-sm text-muted-foreground">No tests assigned yet.</p>
+          <EmptyState icon={ClipboardCheck} title="No tests assigned yet" />
         )}
         {assessments?.map((a) => (
-          <Card key={a.id}>
+          <Card key={a.id} className="border-0 shadow-sm ring-1 ring-border">
             <CardContent className="flex items-center justify-between py-4">
               <div>
-                <p className="font-medium">{a.title}</p>
+                <p className="font-medium text-foreground">{a.title}</p>
                 <p className="text-sm text-muted-foreground">
                   {a.duration_minutes} min · {a.total_marks} marks
                 </p>
               </div>
               {a.status === "CLOSED" ? (
-                <Link href={`/dashboard/assessments/${a.id}/attempt`}>
-                  <Button variant="outline">View results</Button>
-                </Link>
+                <Button
+                  variant="outline"
+                  nativeButton={false}
+                  render={<Link href={`/dashboard/assessments/${a.id}/attempt`}>View results</Link>}
+                />
               ) : (
-                <Link href={`/dashboard/assessments/${a.id}/attempt`}>
-                  <Button>Start</Button>
-                </Link>
+                <Button
+                  nativeButton={false}
+                  render={<Link href={`/dashboard/assessments/${a.id}/attempt`}>Start</Link>}
+                />
               )}
             </CardContent>
           </Card>

@@ -1,11 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { BookOpen, ListTree } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { PageHeader } from "@/components/page-header";
+import { ErrorBanner } from "@/components/error-banner";
 import {
   listSubjects,
   createSubject,
@@ -88,14 +90,17 @@ export default function SubjectsPage() {
   }
 
   return (
-    <div>
-      <h1 className="text-2xl font-semibold">Subjects & Topics</h1>
-      {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
+    <div className="space-y-6">
+      <PageHeader title="Subjects & topics" description="Organize what you teach, by subject and topic." icon={BookOpen} />
+      {error && <ErrorBanner message={error} />}
 
-      <div className="mt-6 grid gap-6 md:grid-cols-2">
-        <Card>
+      <div className="grid gap-5 md:grid-cols-2">
+        <Card className="border-0 shadow-sm ring-1 ring-border">
           <CardHeader>
-            <CardTitle className="text-base">Subjects</CardTitle>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <BookOpen className="size-4 text-primary" />
+              Subjects
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleCreateSubject} className="mb-4 flex gap-2">
@@ -125,11 +130,18 @@ export default function SubjectsPage() {
                 <li key={s.id}>
                   <button
                     onClick={() => setSelectedSubjectId(s.id)}
-                    className={`w-full rounded-md px-2 py-1.5 text-left text-sm ${
-                      selectedSubjectId === s.id ? "bg-primary text-primary-foreground" : "hover:bg-muted"
+                    className={`w-full rounded-md px-2.5 py-2 text-left text-sm transition-colors ${
+                      selectedSubjectId === s.id
+                        ? "bg-primary text-primary-foreground"
+                        : "text-foreground hover:bg-muted"
                     }`}
                   >
-                    {s.name} {s.grade && <span className="opacity-70">· Grade {s.grade}</span>}
+                    {s.name}{" "}
+                    {s.grade && (
+                      <span className={selectedSubjectId === s.id ? "opacity-80" : "text-muted-foreground"}>
+                        · Grade {s.grade}
+                      </span>
+                    )}
                   </button>
                 </li>
               ))}
@@ -137,9 +149,12 @@ export default function SubjectsPage() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="border-0 shadow-sm ring-1 ring-border">
           <CardHeader>
-            <CardTitle className="text-base">Topics</CardTitle>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <ListTree className="size-4 text-primary" />
+              Topics
+            </CardTitle>
           </CardHeader>
           <CardContent>
             {!selectedSubjectId && (
@@ -166,7 +181,7 @@ export default function SubjectsPage() {
                       Add
                     </Button>
                   </div>
-                  {topicError && <p className="text-sm text-red-600">{topicError}</p>}
+                  {topicError && <ErrorBanner message={topicError} />}
                 </form>
 
                 {topics === null && <Skeleton className="h-24 w-full" />}
@@ -175,7 +190,7 @@ export default function SubjectsPage() {
                 )}
                 <ul className="space-y-1">
                   {topics?.map((t) => (
-                    <li key={t.id} className="rounded-md px-2 py-1.5 text-sm">
+                    <li key={t.id} className="rounded-md px-2.5 py-2 text-sm text-foreground">
                       {t.name} {t.chapter && <span className="text-muted-foreground">· {t.chapter}</span>}
                     </li>
                   ))}

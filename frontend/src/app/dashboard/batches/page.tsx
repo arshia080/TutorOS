@@ -2,12 +2,16 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { LayoutGrid, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
+import { PageHeader } from "@/components/page-header";
+import { ErrorBanner } from "@/components/error-banner";
+import { EmptyState } from "@/components/empty-state";
 import { listBatches, createBatch, type Batch, ApiError } from "@/lib/api";
 
 export default function BatchesPage() {
@@ -48,14 +52,21 @@ export default function BatchesPage() {
   }
 
   return (
-    <div>
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Batches</h1>
-        <Button onClick={() => setShowForm((v) => !v)}>{showForm ? "Cancel" : "New Batch"}</Button>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        title="Batches"
+        description="Groups of students you teach together."
+        icon={LayoutGrid}
+        action={
+          <Button className="gap-1.5" onClick={() => setShowForm((v) => !v)}>
+            {!showForm && <Plus className="size-4" />}
+            {showForm ? "Cancel" : "New batch"}
+          </Button>
+        }
+      />
 
       {showForm && (
-        <Card className="mt-4 max-w-md">
+        <Card className="max-w-md border-0 shadow-sm ring-1 ring-border">
           <CardHeader>
             <CardTitle className="text-base">Create batch</CardTitle>
           </CardHeader>
@@ -75,7 +86,7 @@ export default function BatchesPage() {
                   <Input id="section" value={section} onChange={(e) => setSection(e.target.value)} />
                 </div>
               </div>
-              {formError && <p className="text-sm text-red-600">{formError}</p>}
+              {formError && <ErrorBanner message={formError} />}
               <Button type="submit" disabled={submitting}>
                 {submitting ? "Creating..." : "Create"}
               </Button>
@@ -84,27 +95,30 @@ export default function BatchesPage() {
         </Card>
       )}
 
-      <div className="mt-6">
-        {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && <ErrorBanner message={error} />}
 
-        {!error && batches === null && (
-          <div className="space-y-2">
-            <Skeleton className="h-10 w-full" />
-            <Skeleton className="h-10 w-full" />
-            <Skeleton className="h-10 w-full" />
-          </div>
-        )}
+      {!error && batches === null && (
+        <div className="space-y-2">
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-10 w-full" />
+        </div>
+      )}
 
-        {batches !== null && batches.length === 0 && !error && (
-          <p className="text-sm text-muted-foreground">
-            No batches yet. Create your first one to start adding students.
-          </p>
-        )}
+      {batches !== null && batches.length === 0 && !error && (
+        <EmptyState
+          icon={LayoutGrid}
+          title="No batches yet"
+          description="Create your first batch to start adding students."
+          action={<Button onClick={() => setShowForm(true)}>New batch</Button>}
+        />
+      )}
 
-        {batches !== null && batches.length > 0 && (
+      {batches !== null && batches.length > 0 && (
+        <div className="overflow-hidden rounded-lg border border-border">
           <Table>
             <TableHeader>
-              <TableRow>
+              <TableRow className="hover:bg-transparent">
                 <TableHead>Name</TableHead>
                 <TableHead>Grade</TableHead>
                 <TableHead>Section</TableHead>
@@ -115,19 +129,22 @@ export default function BatchesPage() {
               {batches.map((batch) => (
                 <TableRow key={batch.id}>
                   <TableCell>
-                    <Link href={`/dashboard/batches/${batch.id}`} className="font-medium underline">
+                    <Link
+                      href={`/dashboard/batches/${batch.id}`}
+                      className="font-medium text-foreground hover:text-primary"
+                    >
                       {batch.name}
                     </Link>
                   </TableCell>
-                  <TableCell>{batch.grade ?? "—"}</TableCell>
-                  <TableCell>{batch.section ?? "—"}</TableCell>
-                  <TableCell>{batch.student_count}</TableCell>
+                  <TableCell className="text-muted-foreground">{batch.grade ?? "—"}</TableCell>
+                  <TableCell className="text-muted-foreground">{batch.section ?? "—"}</TableCell>
+                  <TableCell className="text-muted-foreground">{batch.student_count}</TableCell>
                 </TableRow>
               ))}
             </TableBody>
           </Table>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

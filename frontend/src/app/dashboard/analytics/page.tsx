@@ -2,11 +2,15 @@
 
 import { useEffect, useState } from "react";
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { BarChart3, LayoutGrid, AlertTriangle } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { TrendArrow } from "@/components/trend-arrow";
+import { PageHeader } from "@/components/page-header";
+import { ErrorBanner } from "@/components/error-banner";
+import { EmptyState } from "@/components/empty-state";
 import {
   listBatches,
   getAttentionPanel,
@@ -55,34 +59,44 @@ export default function AnalyticsPage() {
     : [];
 
   return (
-    <div>
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Analytics</h1>
-        {batches.length > 0 && (
-          <Select value={batchId ?? undefined} onValueChange={(v: string | null) => v && setBatchId(v)}>
-            <SelectTrigger className="w-56">
-              <SelectValue placeholder="Select batch" />
-            </SelectTrigger>
-            <SelectContent>
-              {batches.map((b) => (
-                <SelectItem key={b.id} value={b.id}>
-                  {b.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        )}
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        title="Analytics"
+        description="Class performance and where students need help."
+        icon={BarChart3}
+        action={
+          batches.length > 0 && (
+            <Select value={batchId ?? undefined} onValueChange={(v: string | null) => v && setBatchId(v)}>
+              <SelectTrigger className="w-56">
+                <SelectValue placeholder="Select batch" />
+              </SelectTrigger>
+              <SelectContent>
+                {batches.map((b) => (
+                  <SelectItem key={b.id} value={b.id}>
+                    {b.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )
+        }
+      />
 
-      {batches.length === 0 && <p className="mt-6 text-sm text-muted-foreground">Create a batch first.</p>}
-      {error && <p className="mt-6 text-sm text-red-600">{error}</p>}
+      {batches.length === 0 && (
+        <EmptyState
+          icon={LayoutGrid}
+          title="Create a batch first"
+          description="Analytics appear once you have a batch with graded results."
+        />
+      )}
+      {error && <ErrorBanner message={error} />}
 
       {batchId && !error && (
         <>
-          <div className="mt-6 grid gap-6 lg:grid-cols-2">
-            <Card>
+          <div className="grid gap-5 lg:grid-cols-2">
+            <Card className="border-0 shadow-sm ring-1 ring-border">
               <CardHeader>
-                <CardTitle className="text-base">Class Performance</CardTitle>
+                <CardTitle className="text-base">Class performance</CardTitle>
               </CardHeader>
               <CardContent>
                 {classPerf === null ? (
@@ -90,11 +104,18 @@ export default function AnalyticsPage() {
                 ) : (
                   <ResponsiveContainer width="100%" height={260}>
                     <BarChart data={summaryData}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="name" />
-                      <YAxis domain={[0, 100]} />
-                      <Tooltip />
-                      <Bar dataKey="value" fill="#2563eb" radius={[4, 4, 0, 0]} />
+                      <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                      <XAxis dataKey="name" stroke="var(--muted-foreground)" fontSize={12} />
+                      <YAxis domain={[0, 100]} stroke="var(--muted-foreground)" fontSize={12} />
+                      <Tooltip
+                        contentStyle={{
+                          background: "var(--popover)",
+                          border: "1px solid var(--border)",
+                          borderRadius: "0.5rem",
+                          fontSize: "0.8rem",
+                        }}
+                      />
+                      <Bar dataKey="value" fill="var(--chart-1)" radius={[4, 4, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 )}
@@ -108,9 +129,9 @@ export default function AnalyticsPage() {
               </CardContent>
             </Card>
 
-            <Card>
+            <Card className="border-0 shadow-sm ring-1 ring-border">
               <CardHeader>
-                <CardTitle className="text-base">Topic Mastery (class average)</CardTitle>
+                <CardTitle className="text-base">Topic mastery (class average)</CardTitle>
               </CardHeader>
               <CardContent>
                 {classPerf === null ? (
@@ -120,12 +141,19 @@ export default function AnalyticsPage() {
                 ) : (
                   <ResponsiveContainer width="100%" height={260}>
                     <BarChart data={classPerf.topics.map((t) => ({ name: t.topic_name, mastery: t.average_mastery }))}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="name" />
-                      <YAxis domain={[0, 100]} />
-                      <Tooltip />
-                      <Legend />
-                      <Bar dataKey="mastery" fill="#16a34a" radius={[4, 4, 0, 0]} />
+                      <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                      <XAxis dataKey="name" stroke="var(--muted-foreground)" fontSize={12} />
+                      <YAxis domain={[0, 100]} stroke="var(--muted-foreground)" fontSize={12} />
+                      <Tooltip
+                        contentStyle={{
+                          background: "var(--popover)",
+                          border: "1px solid var(--border)",
+                          borderRadius: "0.5rem",
+                          fontSize: "0.8rem",
+                        }}
+                      />
+                      <Legend wrapperStyle={{ fontSize: "0.8rem" }} />
+                      <Bar dataKey="mastery" fill="var(--chart-2)" radius={[4, 4, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 )}
@@ -133,36 +161,42 @@ export default function AnalyticsPage() {
             </Card>
           </div>
 
-          <h2 className="mt-8 text-lg font-medium">Attention Panel</h2>
-          <p className="text-sm text-muted-foreground">Each student's weakest topic right now.</p>
-          <div className="mt-2">
+          <div>
+            <div className="mb-1 flex items-center gap-2">
+              <AlertTriangle className="size-4 text-primary" />
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Attention panel</h2>
+            </div>
+            <p className="mb-3 text-sm text-muted-foreground">Each student&apos;s weakest topic right now.</p>
+
             {attention === null && <Skeleton className="h-10 w-full" />}
             {attention !== null && attention.length === 0 && (
-              <p className="text-sm text-muted-foreground">No graded test results in this batch yet.</p>
+              <EmptyState title="No graded test results in this batch yet" />
             )}
             {attention !== null && attention.length > 0 && (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Student</TableHead>
-                    <TableHead>Topic</TableHead>
-                    <TableHead>Mastery</TableHead>
-                    <TableHead>Trend</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {attention.map((row) => (
-                    <TableRow key={row.student_id}>
-                      <TableCell>{row.student_name}</TableCell>
-                      <TableCell>{row.topic_name}</TableCell>
-                      <TableCell>{row.mastery_score}%</TableCell>
-                      <TableCell>
-                        <TrendArrow trend={row.trend} />
-                      </TableCell>
+              <div className="overflow-hidden rounded-lg border border-border">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="hover:bg-transparent">
+                      <TableHead>Student</TableHead>
+                      <TableHead>Topic</TableHead>
+                      <TableHead>Mastery</TableHead>
+                      <TableHead>Trend</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {attention.map((row) => (
+                      <TableRow key={row.student_id}>
+                        <TableCell className="font-medium">{row.student_name}</TableCell>
+                        <TableCell className="text-muted-foreground">{row.topic_name}</TableCell>
+                        <TableCell className="font-medium text-destructive">{row.mastery_score}%</TableCell>
+                        <TableCell>
+                          <TrendArrow trend={row.trend} />
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
             )}
           </div>
         </>

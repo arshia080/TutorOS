@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ErrorBanner } from "@/components/error-banner";
 import {
   listBatches,
   listSubjects,
@@ -103,7 +104,7 @@ export function HomeworkForm({ onCreated }: { onCreated: () => void }) {
               ))}
             </SelectContent>
           </Select>
-          {errors.batch_id && <p className="text-sm text-red-600">{errors.batch_id.message}</p>}
+          {errors.batch_id && <p className="text-sm text-destructive">{errors.batch_id.message}</p>}
         </div>
 
         <div className="space-y-1">
@@ -120,7 +121,7 @@ export function HomeworkForm({ onCreated }: { onCreated: () => void }) {
               ))}
             </SelectContent>
           </Select>
-          {errors.subject_id && <p className="text-sm text-red-600">{errors.subject_id.message}</p>}
+          {errors.subject_id && <p className="text-sm text-destructive">{errors.subject_id.message}</p>}
         </div>
       </div>
 
@@ -145,7 +146,7 @@ export function HomeworkForm({ onCreated }: { onCreated: () => void }) {
       <div className="space-y-1">
         <Label htmlFor="title">Title</Label>
         <Input id="title" {...register("title")} />
-        {errors.title && <p className="text-sm text-red-600">{errors.title.message}</p>}
+        {errors.title && <p className="text-sm text-destructive">{errors.title.message}</p>}
       </div>
 
       <div className="space-y-1">
@@ -156,7 +157,7 @@ export function HomeworkForm({ onCreated }: { onCreated: () => void }) {
       <div className="space-y-1">
         <Label htmlFor="due_date">Due date</Label>
         <Input id="due_date" type="datetime-local" {...register("due_date")} />
-        {errors.due_date && <p className="text-sm text-red-600">{errors.due_date.message}</p>}
+        {errors.due_date && <p className="text-sm text-destructive">{errors.due_date.message}</p>}
       </div>
 
       <div className="space-y-1">
@@ -170,7 +171,7 @@ export function HomeworkForm({ onCreated }: { onCreated: () => void }) {
         />
       </div>
 
-      {submitError && <p className="text-sm text-red-600">{submitError}</p>}
+      {submitError && <ErrorBanner message={submitError} />}
       <Button type="submit" disabled={submitting}>
         {submitting ? "Creating..." : "Create homework"}
       </Button>

@@ -2,11 +2,13 @@
 
 import { use, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Sparkles, ArrowRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ErrorBanner } from "@/components/error-banner";
 import {
   getPracticeSet,
   submitPracticeResponse,
@@ -74,7 +76,7 @@ export default function PracticePage({ params }: { params: Promise<{ id: string 
     }
   }
 
-  if (error) return <p className="text-sm text-red-600">{error}</p>;
+  if (error) return <ErrorBanner message={error} />;
 
   if (stage === "loading") {
     return <Skeleton className="h-64 w-full" />;
@@ -84,19 +86,21 @@ export default function PracticePage({ params }: { params: Promise<{ id: string 
     const improved = completion.delta > 0;
     return (
       <div className="max-w-2xl">
-        <h1 className="text-2xl font-semibold">Practice results: {completion.practice_set.topic_name}</h1>
+        <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+          Practice results: {completion.practice_set.topic_name}
+        </h1>
 
-        <Card className="mt-4">
-          <CardContent className="py-4">
+        <Card className="mt-4 border-0 shadow-sm ring-1 ring-border">
+          <CardContent className="py-5">
             <div className="flex items-center gap-6">
               <div>
                 <p className="text-sm text-muted-foreground">Before</p>
-                <p className="text-2xl font-semibold">{completion.mastery_before}%</p>
+                <p className="text-2xl font-semibold text-foreground">{completion.mastery_before}%</p>
               </div>
-              <div className="text-2xl text-muted-foreground">→</div>
+              <ArrowRight className="size-5 shrink-0 text-muted-foreground" />
               <div>
                 <p className="text-sm text-muted-foreground">After</p>
-                <p className="text-2xl font-semibold">{completion.mastery_after}%</p>
+                <p className="text-2xl font-semibold text-foreground">{completion.mastery_after}%</p>
               </div>
               <Badge variant={improved ? "default" : "secondary"}>
                 {improved ? "+" : ""}
@@ -109,10 +113,12 @@ export default function PracticePage({ params }: { params: Promise<{ id: string 
 
         <div className="mt-6 space-y-2">
           {completion.responses.map((r, i) => (
-            <Card key={r.question_id}>
+            <Card key={r.question_id} className="border-0 shadow-sm ring-1 ring-border">
               <CardContent className="flex items-center justify-between py-3">
-                <p className="text-sm">Question {i + 1}</p>
-                <Badge variant={r.is_correct ? "default" : "destructive"}>{r.is_correct ? "Correct" : "Incorrect"}</Badge>
+                <p className="text-sm text-foreground">Question {i + 1}</p>
+                <Badge variant={r.is_correct ? "default" : "destructive"}>
+                  {r.is_correct ? "Correct" : "Incorrect"}
+                </Badge>
               </CardContent>
             </Card>
           ))}
@@ -129,22 +135,31 @@ export default function PracticePage({ params }: { params: Promise<{ id: string 
 
   return (
     <div className="max-w-2xl">
-      <h1 className="text-2xl font-semibold">Practice: {practiceSet.topic_name}</h1>
-      <p className="mt-1 text-sm text-muted-foreground">
-        {practiceSet.questions.length} questions -- no time limit, answer at your own pace.
-      </p>
+      <div className="flex items-start gap-3">
+        <div className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-lg bg-secondary text-secondary-foreground">
+          <Sparkles className="size-4.5" />
+        </div>
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+            Practice: {practiceSet.topic_name}
+          </h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {practiceSet.questions.length} questions — no time limit, answer at your own pace.
+          </p>
+        </div>
+      </div>
 
       <div className="mt-6 space-y-4">
         {practiceSet.questions.map((q, i) => {
           const draft = drafts[q.id] ?? {};
           const status = saveStatus[q.id] ?? "idle";
           return (
-            <Card key={q.id}>
+            <Card key={q.id} className="border-0 shadow-sm ring-1 ring-border">
               <CardContent className="py-4">
                 <p className="text-sm text-muted-foreground">
                   Question {i + 1} · {q.difficulty}
                 </p>
-                <p className="mt-1 font-medium">{q.question_text}</p>
+                <p className="mt-1 font-medium text-foreground">{q.question_text}</p>
 
                 <div className="mt-3 space-y-2">
                   {(q.question_type === "MCQ" || q.question_type === "TRUE_FALSE") &&
@@ -176,9 +191,13 @@ export default function PracticePage({ params }: { params: Promise<{ id: string 
         })}
       </div>
 
-      {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
+      {error && (
+        <div className="mt-4">
+          <ErrorBanner message={error} />
+        </div>
+      )}
       <Button className="mt-4" onClick={handleFinish} disabled={finishing || Object.keys(drafts).length === 0}>
-        {finishing ? "Finishing..." : "Finish Practice"}
+        {finishing ? "Finishing..." : "Finish practice"}
       </Button>
     </div>
   );

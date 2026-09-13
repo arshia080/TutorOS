@@ -83,34 +83,41 @@ export default function Home() {
             Tutor<span className="text-primary">OS</span>
           </Link>
           <nav className="hidden items-center gap-8 text-sm font-medium text-muted-foreground md:flex">
-            <a href="#features" className="transition-colors hover:text-foreground">
-              Features
-            </a>
-            <a href="#how-it-works" className="transition-colors hover:text-foreground">
+            <a href="#how-it-works" className="group relative py-1 transition-colors hover:text-foreground">
               How it works
+              <span className="absolute inset-x-0 -bottom-0.5 h-px scale-x-0 bg-primary transition-transform group-hover:scale-x-100" />
+            </a>
+            <a href="#features" className="group relative py-1 transition-colors hover:text-foreground">
+              Features
+              <span className="absolute inset-x-0 -bottom-0.5 h-px scale-x-0 bg-primary transition-transform group-hover:scale-x-100" />
             </a>
           </nav>
           <div className="flex items-center gap-2">
             <Button variant="ghost" nativeButton={false} render={<Link href="/login">Log in</Link>} />
-            <Button nativeButton={false} render={<Link href="/register">Get started</Link>} />
+            <Button className="gap-1.5 shadow-sm" nativeButton={false} render={<Link href="/register">Get started <ArrowRight className="size-3.5" /></Link>} />
           </div>
         </div>
       </header>
 
       <main className="flex-1">
         {/* Hero */}
-        <section className="relative overflow-hidden border-b border-border/70">
-          <div className="pointer-events-none absolute -top-24 right-0 h-96 w-96 rounded-full bg-accent/50 blur-3xl" />
-          <div className="pointer-events-none absolute bottom-0 left-1/3 h-72 w-72 rounded-full bg-secondary/60 blur-3xl" />
+        <section className="relative overflow-hidden border-b border-border/70 bg-background">
+          <div
+            className="pointer-events-none absolute inset-x-0 top-0 h-[420px]"
+            style={{
+              background:
+                "radial-gradient(60% 55% at 50% -10%, color-mix(in oklch, var(--accent), transparent 45%), transparent 75%)",
+            }}
+          />
 
           <div className="relative mx-auto grid max-w-6xl gap-14 px-6 py-20 lg:grid-cols-[1.05fr_1fr] lg:items-center lg:py-28">
-            <div>
+            <div className="animate-in fade-in slide-in-from-bottom-3 duration-700">
               <div className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1 text-xs font-medium text-muted-foreground shadow-sm">
                 <span className="size-1.5 rounded-full bg-primary" />
                 Built for tutors and small institutes
               </div>
 
-              <h1 className="mt-6 max-w-xl text-4xl font-semibold tracking-tight text-foreground sm:text-5xl">
+              <h1 className="mt-6 max-w-xl text-4xl font-semibold tracking-tight text-balance text-foreground sm:text-5xl">
                 The operating system for your tutoring practice
               </h1>
 
@@ -123,6 +130,7 @@ export default function Home() {
               <div className="mt-9 flex flex-wrap items-center gap-4">
                 <Button
                   size="lg"
+                  className="shadow-md shadow-primary/20"
                   nativeButton={false}
                   render={
                     <Link href="/register" className="gap-2">
@@ -145,7 +153,32 @@ export default function Home() {
             </div>
 
             {/* Product mockup */}
-            <div className="relative">
+            <div className="relative animate-in fade-in slide-in-from-bottom-4 duration-1000">
+              {/* Floating accent cards */}
+              <div className="animate-gentle-float absolute -top-6 -right-4 z-10 hidden w-40 rounded-lg border border-border bg-card p-3 shadow-lg sm:block">
+                <div className="flex items-center gap-2">
+                  <div className="flex size-7 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+                    <Sparkles className="size-3.5" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="truncate text-xs font-medium text-foreground">AI-generated</p>
+                    <p className="text-[0.65rem] text-muted-foreground">Ready in 12 seconds</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="animate-gentle-float-delayed absolute -bottom-6 -left-6 z-10 hidden w-44 rounded-lg border border-border bg-card p-3 shadow-lg sm:block">
+                <div className="flex items-center gap-3">
+                  <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
+                    84%
+                  </div>
+                  <div className="min-w-0">
+                    <p className="truncate text-xs font-medium text-foreground">Class average</p>
+                    <p className="text-[0.65rem] text-muted-foreground">Overall mastery</p>
+                  </div>
+                </div>
+              </div>
+
               <div className="overflow-hidden rounded-xl border border-border bg-card shadow-xl shadow-primary/5">
                 <div className="flex items-center gap-1.5 border-b border-border/70 bg-muted/40 px-4 py-3">
                   <span className="size-2.5 rounded-full bg-destructive/40" />
@@ -156,7 +189,8 @@ export default function Home() {
                 <div className="space-y-5 p-6">
                   <div className="flex items-center justify-between">
                     <p className="text-sm font-medium text-foreground">Topic mastery — Class 10-A</p>
-                    <span className="rounded-full bg-secondary px-2.5 py-0.5 text-xs font-medium text-secondary-foreground">
+                    <span className="flex items-center gap-1.5 rounded-full bg-secondary px-2.5 py-0.5 text-xs font-medium text-secondary-foreground">
+                      <span className="size-1.5 rounded-full bg-emerald-500" />
                       Live
                     </span>
                   </div>
@@ -197,11 +231,11 @@ export default function Home() {
 
         {/* Stats strip */}
         <section className="border-b border-border/70 bg-muted/30">
-          <div className="mx-auto grid max-w-6xl grid-cols-2 gap-8 px-6 py-12 sm:grid-cols-4">
+          <div className="mx-auto grid max-w-6xl grid-cols-2 gap-x-8 gap-y-10 px-6 py-14 sm:grid-cols-4 sm:divide-x sm:divide-border">
             {STATS.map((stat) => (
-              <div key={stat.label}>
+              <div key={stat.label} className="sm:px-6 sm:first:pl-0">
                 <p className="text-3xl font-semibold tracking-tight text-primary">{stat.value}</p>
-                <p className="mt-1 text-sm text-muted-foreground">{stat.label}</p>
+                <p className="mt-1.5 text-sm leading-snug text-muted-foreground">{stat.label}</p>
               </div>
             ))}
           </div>
@@ -224,8 +258,10 @@ export default function Home() {
                 key={step.number}
                 className={`relative pl-6 ${i > 0 ? "md:border-l md:border-border md:pl-8" : ""}`}
               >
-                <span className="text-sm font-semibold text-primary/70">{step.number}</span>
-                <h3 className="mt-2 text-lg font-semibold text-foreground">{step.title}</h3>
+                <span className="flex size-9 items-center justify-center rounded-full border border-primary/20 bg-primary/5 text-sm font-semibold text-primary">
+                  {step.number}
+                </span>
+                <h3 className="mt-4 text-lg font-semibold text-foreground">{step.title}</h3>
                 <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
                   {step.description}
                 </p>
@@ -254,8 +290,11 @@ export default function Home() {
                     i % 2 === 1 ? "md:[&>*:first-child]:order-2" : ""
                   }`}
                 >
-                  <div className="flex items-center justify-center rounded-xl border border-border bg-card p-12 shadow-sm">
-                    <pillar.icon className="size-16 text-primary" strokeWidth={1.25} />
+                  <div className="group flex items-center justify-center overflow-hidden rounded-xl border border-border bg-gradient-to-br from-card to-secondary/40 p-12 shadow-sm transition-shadow hover:shadow-md">
+                    <pillar.icon
+                      className="size-16 text-primary transition-transform duration-300 group-hover:scale-110"
+                      strokeWidth={1.25}
+                    />
                   </div>
                   <div>
                     <h3 className="text-xl font-semibold text-foreground">{pillar.title}</h3>
@@ -319,12 +358,52 @@ export default function Home() {
         </section>
       </main>
 
-      <footer className="border-t border-border/70">
-        <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-3 px-6 py-8 text-sm text-muted-foreground sm:flex-row">
-          <span className="font-medium text-foreground">
-            Tutor<span className="text-primary">OS</span>
-          </span>
-          <span>© {new Date().getFullYear()} TutorOS. Built for tutors who want their data to mean something.</span>
+      <footer className="border-t border-border/70 bg-muted/20">
+        <div className="mx-auto max-w-6xl px-6 py-14">
+          <div className="grid gap-10 sm:grid-cols-[1.3fr_1fr_1fr]">
+            <div>
+              <span className="text-lg font-semibold tracking-tight text-foreground">
+                Tutor<span className="text-primary">OS</span>
+              </span>
+              <p className="mt-3 max-w-xs text-sm leading-relaxed text-muted-foreground">
+                Assessments, mastery tracking, and personalized practice for tutors who want
+                their data to mean something.
+              </p>
+            </div>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Product</p>
+              <ul className="mt-3 space-y-2 text-sm">
+                <li>
+                  <a href="#how-it-works" className="text-muted-foreground transition-colors hover:text-foreground">
+                    How it works
+                  </a>
+                </li>
+                <li>
+                  <a href="#features" className="text-muted-foreground transition-colors hover:text-foreground">
+                    Features
+                  </a>
+                </li>
+              </ul>
+            </div>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Account</p>
+              <ul className="mt-3 space-y-2 text-sm">
+                <li>
+                  <Link href="/login" className="text-muted-foreground transition-colors hover:text-foreground">
+                    Log in
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/register" className="text-muted-foreground transition-colors hover:text-foreground">
+                    Get started
+                  </Link>
+                </li>
+              </ul>
+            </div>
+          </div>
+          <div className="mt-12 border-t border-border/70 pt-6 text-sm text-muted-foreground">
+            © {new Date().getFullYear()} TutorOS. All rights reserved.
+          </div>
         </div>
       </footer>
     </div>

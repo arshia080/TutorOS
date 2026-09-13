@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ErrorBanner } from "@/components/error-banner";
 import {
   generateQuestions,
   listBatches,
@@ -181,7 +182,7 @@ export function AIGenerateForm() {
         </div>
       </div>
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && <ErrorBanner message={error} />}
       <Button type="submit" disabled={submitting || !batchId || !subjectId || types.length === 0}>
         {submitting ? "Generating..." : "Generate with AI"}
       </Button>

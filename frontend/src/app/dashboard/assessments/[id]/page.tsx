@@ -2,6 +2,7 @@
 
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
+import { ClipboardCheck, Eye, Plus } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,6 +10,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { PageHeader } from "@/components/page-header";
+import { ErrorBanner } from "@/components/error-banner";
+import { EmptyState } from "@/components/empty-state";
 import {
   getAssessment,
   listQuestions,
@@ -97,11 +101,11 @@ export default function AssessmentBuilderPage({ params }: { params: Promise<{ id
     }
   }
 
-  if (error) return <p className="text-sm text-red-600">{error}</p>;
+  if (error) return <ErrorBanner message={error} />;
 
   if (assessment === null) {
     return (
-      <div className="space-y-2">
+      <div className="space-y-3">
         <Skeleton className="h-8 w-64" />
         <Skeleton className="h-32 w-full" />
       </div>
@@ -109,24 +113,26 @@ export default function AssessmentBuilderPage({ params }: { params: Promise<{ id
   }
 
   return (
-    <div>
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold">{assessment.title}</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {assessment.duration_minutes} min · {assessment.total_marks} marks declared ·{" "}
-            {questionMarksTotal} marks from questions so far
-          </p>
-        </div>
-        <Badge>{assessment.status}</Badge>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        title={assessment.title}
+        description={`${assessment.duration_minutes} min · ${assessment.total_marks} marks declared · ${questionMarksTotal} marks from questions so far`}
+        icon={ClipboardCheck}
+        action={<Badge className="text-xs">{assessment.status}</Badge>}
+      />
 
-      <div className="mt-4 flex gap-2">
+      <div className="flex flex-wrap gap-2">
         {assessment.status === "PUBLISHED" && (
           <>
-            <Link href={`/dashboard/assessments/${id}/attempts`}>
-              <Button variant="outline">View attempts</Button>
-            </Link>
+            <Button
+              variant="outline"
+              className="gap-1.5"
+              nativeButton={false}
+              render={<Link href={`/dashboard/assessments/${id}/attempts`}>
+                <Eye className="size-4" />
+                View attempts
+              </Link>}
+            />
             <Button variant="destructive" onClick={handleClose}>
               Close assessment
             </Button>
@@ -140,105 +146,124 @@ export default function AssessmentBuilderPage({ params }: { params: Promise<{ id
       </div>
 
       {publishErrors && (
-        <Card className="mt-4 border-red-300">
-          <CardContent className="py-4">
-            <p className="mb-2 text-sm font-medium text-red-600">Cannot publish yet:</p>
-            <ul className="list-disc space-y-1 pl-5 text-sm text-red-600">
-              {publishErrors.map((e, i) => (
-                <li key={i}>{e}</li>
-              ))}
-            </ul>
-          </CardContent>
-        </Card>
+        <div className="rounded-lg border border-destructive/25 bg-destructive/5 px-4 py-3">
+          <p className="mb-1.5 text-sm font-medium text-destructive">Cannot publish yet:</p>
+          <ul className="list-disc space-y-1 pl-5 text-sm text-destructive">
+            {publishErrors.map((e, i) => (
+              <li key={i}>{e}</li>
+            ))}
+          </ul>
+        </div>
       )}
 
-      <div className="mt-6 flex items-center justify-between">
-        <h2 className="text-lg font-medium">Questions</h2>
-        {editable && <Button onClick={() => setShowForm((v) => !v)}>{showForm ? "Cancel" : "Add Question"}</Button>}
-      </div>
+      <div>
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Questions</h2>
+          {editable && (
+            <Button size="sm" className="gap-1.5" onClick={() => setShowForm((v) => !v)}>
+              {!showForm && <Plus className="size-3.5" />}
+              {showForm ? "Cancel" : "Add question"}
+            </Button>
+          )}
+        </div>
 
-      {showForm && (
-        <Card className="mt-4 max-w-xl">
-          <CardHeader>
-            <CardTitle className="text-base">New question</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <QuestionForm
-              assessmentId={id}
-              onAdded={() => {
-                setShowForm(false);
-                load();
-              }}
-            />
-          </CardContent>
-        </Card>
-      )}
-
-      {actionError && <p className="mt-2 text-sm text-red-600">{actionError}</p>}
-
-      <div className="mt-4 space-y-3">
-        {questions === null && <Skeleton className="h-20 w-full" />}
-        {questions !== null && questions.length === 0 && (
-          <p className="text-sm text-muted-foreground">No questions yet.</p>
+        {showForm && (
+          <Card className="mb-4 max-w-xl border-0 shadow-sm ring-1 ring-border">
+            <CardHeader>
+              <CardTitle className="text-base">New question</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <QuestionForm
+                assessmentId={id}
+                onAdded={() => {
+                  setShowForm(false);
+                  load();
+                }}
+              />
+            </CardContent>
+          </Card>
         )}
-        {questions?.map((q, i) =>
-          editingId === q.id ? (
-            <EditQuestionCard
-              key={q.id}
-              assessmentId={id}
-              question={q}
-              topics={topics}
-              onDone={() => {
-                setEditingId(null);
-                load();
-              }}
-              onCancel={() => setEditingId(null)}
-            />
-          ) : (
-            <Card key={q.id}>
-              <CardContent className="py-4">
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <span>
-                        Q{i + 1} · {q.question_type} · {q.marks} marks
-                        {q.topic_id && ` · ${topics.find((t) => t.id === q.topic_id)?.name ?? "topic set"}`}
-                        {q.difficulty && ` · ${q.difficulty}`}
-                      </span>
-                      {q.source !== "MANUAL" && <Badge variant="secondary">{SOURCE_LABEL[q.source] ?? q.source}</Badge>}
+
+        {actionError && (
+          <div className="mb-3">
+            <ErrorBanner message={actionError} />
+          </div>
+        )}
+
+        <div className="space-y-3">
+          {questions === null && <Skeleton className="h-20 w-full" />}
+          {questions !== null && questions.length === 0 && (
+            <EmptyState icon={ClipboardCheck} title="No questions yet" />
+          )}
+          {questions?.map((q, i) =>
+            editingId === q.id ? (
+              <EditQuestionCard
+                key={q.id}
+                assessmentId={id}
+                question={q}
+                topics={topics}
+                onDone={() => {
+                  setEditingId(null);
+                  load();
+                }}
+                onCancel={() => setEditingId(null)}
+              />
+            ) : (
+              <Card key={q.id} className="border-0 shadow-sm ring-1 ring-border">
+                <CardContent className="py-4">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+                        <span>
+                          Q{i + 1} · {q.question_type} · {q.marks} marks
+                          {q.topic_id && ` · ${topics.find((t) => t.id === q.topic_id)?.name ?? "topic set"}`}
+                          {q.difficulty && ` · ${q.difficulty}`}
+                        </span>
+                        {q.source !== "MANUAL" && (
+                          <Badge variant="secondary">{SOURCE_LABEL[q.source] ?? q.source}</Badge>
+                        )}
+                      </div>
+                      <p className="mt-1 font-medium text-foreground">{q.question_text}</p>
+                      {q.options.length > 0 && (
+                        <ul className="mt-2 space-y-1">
+                          {q.options.map((o) => (
+                            <li
+                              key={o.id}
+                              className={`text-sm ${o.is_correct ? "font-medium text-primary" : "text-muted-foreground"}`}
+                            >
+                              {o.is_correct ? "✓ " : "— "}
+                              {o.option_text}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
                     </div>
-                    <p className="mt-1 font-medium">{q.question_text}</p>
-                    {q.options.length > 0 && (
-                      <ul className="mt-2 space-y-1">
-                        {q.options.map((o) => (
-                          <li key={o.id} className={`text-sm ${o.is_correct ? "font-medium text-green-700" : ""}`}>
-                            {o.is_correct ? "✓ " : "— "}
-                            {o.option_text}
-                          </li>
-                        ))}
-                      </ul>
+                    {editable && (
+                      <div className="flex shrink-0 gap-1">
+                        <Button variant="ghost" size="sm" onClick={() => setEditingId(q.id)}>
+                          Edit
+                        </Button>
+                        {q.source !== "MANUAL" && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            disabled={regeneratingId === q.id}
+                            onClick={() => handleRegenerate(q.id)}
+                          >
+                            {regeneratingId === q.id ? "Regenerating..." : "Regenerate"}
+                          </Button>
+                        )}
+                        <Button variant="ghost" size="sm" onClick={() => handleDelete(q.id)}>
+                          Delete
+                        </Button>
+                      </div>
                     )}
                   </div>
-                  {editable && (
-                    <div className="flex gap-1">
-                      <Button variant="ghost" size="sm" onClick={() => setEditingId(q.id)}>
-                        Edit
-                      </Button>
-                      {q.source !== "MANUAL" && (
-                        <Button variant="ghost" size="sm" disabled={regeneratingId === q.id} onClick={() => handleRegenerate(q.id)}>
-                          {regeneratingId === q.id ? "Regenerating..." : "Regenerate"}
-                        </Button>
-                      )}
-                      <Button variant="ghost" size="sm" onClick={() => handleDelete(q.id)}>
-                        Delete
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          ),
-        )}
+                </CardContent>
+              </Card>
+            ),
+          )}
+        </div>
       </div>
     </div>
   );
@@ -283,7 +308,7 @@ function EditQuestionCard({
   }
 
   return (
-    <Card className="border-primary">
+    <Card className="border-0 shadow-sm ring-2 ring-primary">
       <CardContent className="space-y-3 py-4">
         <div className="space-y-1">
           <Label>Question text</Label>
@@ -323,7 +348,7 @@ function EditQuestionCard({
             <Input type="number" min={0.5} step="0.5" value={marks} onChange={(e) => setMarks(e.target.value)} />
           </div>
         </div>
-        {error && <p className="text-sm text-red-600">{error}</p>}
+        {error && <ErrorBanner message={error} />}
         <div className="flex gap-2">
           <Button size="sm" onClick={handleSave} disabled={submitting}>
             {submitting ? "Saving..." : "Save"}

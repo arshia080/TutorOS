@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ErrorBanner } from "@/components/error-banner";
 import { addQuestion, type QuestionType, ApiError } from "@/lib/api";
 
 const QUESTION_TYPES: { value: QuestionType; label: string }[] = [
@@ -193,7 +194,7 @@ export function QuestionForm({ assessmentId, onAdded }: { assessmentId: string; 
         </p>
       )}
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && <ErrorBanner message={error} />}
       <Button type="submit" disabled={submitting}>
         {submitting ? "Adding..." : "Add question"}
       </Button>

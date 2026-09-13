@@ -1,12 +1,16 @@
 "use client";
 
 import { Fragment, use, useEffect, useState } from "react";
+import { ClipboardList } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { PageHeader } from "@/components/page-header";
+import { ErrorBanner } from "@/components/error-banner";
+import { EmptyState } from "@/components/empty-state";
 import {
   listAttempts,
   listStudents,
@@ -38,19 +42,19 @@ export default function AttemptsPage({ params }: { params: Promise<{ id: string 
   const studentById = Object.fromEntries(students.map((s) => [s.id, s]));
 
   return (
-    <div>
-      <h1 className="text-2xl font-semibold">Attempts</h1>
+    <div className="space-y-6">
+      <PageHeader title="Attempts" description="Review and grade student attempts." icon={ClipboardList} />
 
-      <div className="mt-4">
-        {error && <p className="text-sm text-red-600">{error}</p>}
-        {!error && attempts === null && <Skeleton className="h-10 w-full" />}
-        {attempts !== null && attempts.length === 0 && (
-          <p className="text-sm text-muted-foreground">No students have started this test yet.</p>
-        )}
-        {attempts !== null && attempts.length > 0 && (
+      {error && <ErrorBanner message={error} />}
+      {!error && attempts === null && <Skeleton className="h-10 w-full" />}
+      {attempts !== null && attempts.length === 0 && (
+        <EmptyState icon={ClipboardList} title="No students have started this test yet" />
+      )}
+      {attempts !== null && attempts.length > 0 && (
+        <div className="overflow-hidden rounded-lg border border-border">
           <Table>
             <TableHeader>
-              <TableRow>
+              <TableRow className="hover:bg-transparent">
                 <TableHead>Student</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Score</TableHead>
@@ -63,11 +67,13 @@ export default function AttemptsPage({ params }: { params: Promise<{ id: string 
                 return (
                   <Fragment key={a.id}>
                     <TableRow>
-                      <TableCell>{student ? `${student.name} (${student.email})` : a.student_id}</TableCell>
+                      <TableCell className="font-medium">
+                        {student ? `${student.name} (${student.email})` : a.student_id}
+                      </TableCell>
                       <TableCell>
                         <Badge variant={a.status === "IN_PROGRESS" ? "secondary" : "default"}>{a.status}</Badge>
                       </TableCell>
-                      <TableCell>{a.total_score ?? "—"}</TableCell>
+                      <TableCell className="text-muted-foreground">{a.total_score ?? "—"}</TableCell>
                       <TableCell>
                         {a.status !== "IN_PROGRESS" && (
                           <Button
@@ -81,8 +87,8 @@ export default function AttemptsPage({ params }: { params: Promise<{ id: string 
                       </TableCell>
                     </TableRow>
                     {expanded === a.id && (
-                      <TableRow>
-                        <TableCell colSpan={4}>
+                      <TableRow className="hover:bg-transparent">
+                        <TableCell colSpan={4} className="bg-muted/20">
                           <GradingPanel assessmentId={assessmentId} attemptId={a.id} onGraded={load} />
                         </TableCell>
                       </TableRow>
@@ -92,8 +98,8 @@ export default function AttemptsPage({ params }: { params: Promise<{ id: string 
               })}
             </TableBody>
           </Table>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -139,11 +145,11 @@ function GradingPanel({
         if (!q) return null;
         const needsGrading = q.options.length === 0 && r.score === null;
         return (
-          <Card key={r.question_id}>
+          <Card key={r.question_id} className="border-0 shadow-sm ring-1 ring-border">
             <CardContent className="py-3">
-              <p className="text-sm font-medium">{q.question_text}</p>
+              <p className="text-sm font-medium text-foreground">{q.question_text}</p>
               {q.options.length > 0 ? (
-                <p className="mt-1 text-sm">
+                <p className="mt-1 text-sm text-muted-foreground">
                   {r.is_correct ? "Correct" : "Incorrect"} · Score: {r.score} / {q.marks}
                 </p>
               ) : (
@@ -167,7 +173,9 @@ function GradingPanel({
                       </Button>
                     </div>
                   ) : (
-                    <p className="mt-1 text-sm text-green-700">Graded: {r.score} / {q.marks}</p>
+                    <p className="mt-1 text-sm font-medium text-primary">
+                      Graded: {r.score} / {q.marks}
+                    </p>
                   )}
                 </>
               )}

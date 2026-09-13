@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ErrorBanner } from "@/components/error-banner";
 import {
   uploadPdfForExtraction,
   getExtractionJob,
@@ -106,7 +107,7 @@ export function PDFUploadForm() {
         <Input id="pdf" type="file" accept="application/pdf" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
       </div>
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && <ErrorBanner message={error} />}
       {stage === "processing" && (
         <p className="text-sm text-muted-foreground">Extracting questions... this can take up to a minute.</p>
       )}

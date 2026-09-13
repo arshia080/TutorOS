@@ -3,9 +3,12 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { LayoutGrid, Users, Sparkles, TrendingUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
+import { PageHeader } from "@/components/page-header";
+import { ErrorBanner } from "@/components/error-banner";
+import { StatCard } from "@/components/stat-card";
 import { TrendArrow } from "@/components/trend-arrow";
 import {
   getDashboard,
@@ -20,10 +23,14 @@ import { useAuth } from "@/lib/use-auth";
 export default function DashboardOverviewPage() {
   const { user } = useAuth();
   if (!user) return null;
-  return user.role === "TEACHER" ? <TeacherOverview /> : <StudentOverview studentId={user.id} />;
+  return user.role === "TEACHER" ? (
+    <TeacherOverview name={user.name} />
+  ) : (
+    <StudentOverview studentId={user.id} name={user.name} />
+  );
 }
 
-function TeacherOverview() {
+function TeacherOverview({ name }: { name: string }) {
   const [data, setData] = useState<DashboardOverview | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -34,35 +41,20 @@ function TeacherOverview() {
   }, []);
 
   return (
-    <div>
-      <h1 className="text-2xl font-semibold">Overview</h1>
-      <p className="mt-1 text-sm text-muted-foreground">A quick look at your batches and students.</p>
+    <div className="space-y-8">
+      <PageHeader title={`Welcome back, ${name.split(" ")[0]}`} description="A quick look at your batches and students." />
 
-      {error && <p className="mt-6 text-sm text-red-600">{error}</p>}
+      {error && <ErrorBanner message={error} />}
 
-      <div className="mt-6 grid grid-cols-2 gap-4 sm:max-w-md">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Total Batches</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {data === null ? <Skeleton className="h-8 w-12" /> : <p className="text-3xl font-semibold">{data.total_batches}</p>}
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Total Students</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {data === null ? <Skeleton className="h-8 w-12" /> : <p className="text-3xl font-semibold">{data.total_students}</p>}
-          </CardContent>
-        </Card>
+      <div className="grid grid-cols-2 gap-4 sm:max-w-md">
+        <StatCard label="Total batches" value={data === null ? null : data.total_batches} icon={LayoutGrid} />
+        <StatCard label="Total students" value={data === null ? null : data.total_students} icon={Users} />
       </div>
     </div>
   );
 }
 
-function StudentOverview({ studentId }: { studentId: string }) {
+function StudentOverview({ studentId, name }: { studentId: string; name: string }) {
   const router = useRouter();
   const [perf, setPerf] = useState<StudentPerformance | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -88,37 +80,35 @@ function StudentOverview({ studentId }: { studentId: string }) {
   }
 
   return (
-    <div>
-      <h1 className="text-2xl font-semibold">Your Progress</h1>
+    <div className="space-y-8">
+      <PageHeader title={`Welcome back, ${name.split(" ")[0]}`} description="Here's where your progress stands." />
 
-      {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
+      {error && <ErrorBanner message={error} />}
 
       {!error && perf === null && (
-        <div className="mt-6 space-y-2">
-          <Skeleton className="h-24 w-full" />
-          <Skeleton className="h-24 w-full" />
+        <div className="grid gap-4 sm:grid-cols-3">
+          {[0, 1, 2].map((i) => (
+            <Card key={i} className="border-0 shadow-sm ring-1 ring-border">
+              <CardContent className="h-20 animate-pulse rounded-md bg-muted/60" />
+            </Card>
+          ))}
         </div>
       )}
 
       {perf !== null && perf.topics.length === 0 && (
-        <p className="mt-6 text-sm text-muted-foreground">
-          No graded test results yet -- your progress will show up here once you've completed a test.
-        </p>
+        <div className="rounded-lg border border-dashed border-border bg-muted/20 px-6 py-14 text-center text-sm text-muted-foreground">
+          No graded test results yet — your progress will show up here once you&apos;ve completed a test.
+        </div>
       )}
 
       {perf !== null && perf.topics.length > 0 && (
         <>
-          <Card className="mt-6 max-w-xs">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Overall Mastery</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-3xl font-semibold">{perf.overall_mastery}%</p>
-            </CardContent>
-          </Card>
+          <div className="max-w-xs">
+            <StatCard label="Overall mastery" value={`${perf.overall_mastery}%`} icon={TrendingUp} />
+          </div>
 
-          <div className="mt-6 grid gap-4 md:grid-cols-2">
-            <Card>
+          <div className="grid gap-5 md:grid-cols-2">
+            <Card className="border-0 shadow-sm ring-1 ring-border">
               <CardHeader>
                 <CardTitle className="text-base">Strengths</CardTitle>
               </CardHeader>
@@ -126,11 +116,11 @@ function StudentOverview({ studentId }: { studentId: string }) {
                 {perf.strengths.length === 0 ? (
                   <p className="text-sm text-muted-foreground">No topics above 75% mastery yet.</p>
                 ) : (
-                  <ul className="space-y-1">
+                  <ul className="space-y-2.5">
                     {perf.strengths.map((t) => (
-                      <li key={t.topic_id} className="flex justify-between text-sm">
-                        <span>{t.topic_name}</span>
-                        <span className="font-medium text-green-700">{t.mastery_score}%</span>
+                      <li key={t.topic_id} className="flex items-center justify-between text-sm">
+                        <span className="text-foreground">{t.topic_name}</span>
+                        <span className="font-medium text-primary">{t.mastery_score}%</span>
                       </li>
                     ))}
                   </ul>
@@ -138,30 +128,36 @@ function StudentOverview({ studentId }: { studentId: string }) {
               </CardContent>
             </Card>
 
-            <Card>
+            <Card className="border-0 shadow-sm ring-1 ring-border">
               <CardHeader>
-                <CardTitle className="text-base">Needs Practice</CardTitle>
+                <CardTitle className="text-base">Needs practice</CardTitle>
               </CardHeader>
               <CardContent>
-                {generateError && <p className="mb-2 text-sm text-red-600">{generateError}</p>}
+                {generateError && (
+                  <div className="mb-3">
+                    <ErrorBanner message={generateError} />
+                  </div>
+                )}
                 {perf.weak_topics.length === 0 ? (
                   <p className="text-sm text-muted-foreground">No weak topics right now.</p>
                 ) : (
-                  <ul className="space-y-2">
+                  <ul className="space-y-3">
                     {perf.weak_topics.map((t) => (
-                      <li key={t.topic_id} className="flex items-center justify-between text-sm">
-                        <span className="flex items-center gap-2">
-                          {t.topic_name}
-                          <span className="font-medium text-red-600">{t.mastery_score}%</span>
+                      <li key={t.topic_id} className="flex items-center justify-between gap-3 text-sm">
+                        <span className="flex min-w-0 items-center gap-2">
+                          <span className="truncate text-foreground">{t.topic_name}</span>
+                          <span className="shrink-0 font-medium text-destructive">{t.mastery_score}%</span>
                           <TrendArrow trend={t.trend} />
                         </span>
                         <Button
                           size="sm"
                           variant="outline"
+                          className="shrink-0 gap-1.5"
                           disabled={generatingTopicId === t.topic_id}
                           onClick={() => handleGeneratePractice(t.topic_id)}
                         >
-                          {generatingTopicId === t.topic_id ? "Generating..." : "Generate Practice"}
+                          <Sparkles className="size-3.5" />
+                          {generatingTopicId === t.topic_id ? "Generating..." : "Generate practice"}
                         </Button>
                       </li>
                     ))}
@@ -171,8 +167,8 @@ function StudentOverview({ studentId }: { studentId: string }) {
             </Card>
           </div>
 
-          <p className="mt-4 text-xs text-muted-foreground">
-            <Link href="/dashboard/assessments" className="underline">
+          <p className="text-xs text-muted-foreground">
+            <Link href="/dashboard/assessments" className="font-medium text-primary underline-offset-4 hover:underline">
               View your tests
             </Link>{" "}
             for details. Mastery is a product-defined estimate, not a certified measurement of ability.

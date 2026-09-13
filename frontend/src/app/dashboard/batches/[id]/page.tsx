@@ -1,6 +1,7 @@
 "use client";
 
 import { use, useEffect, useState } from "react";
+import { UserPlus, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -8,6 +9,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
+import { PageHeader } from "@/components/page-header";
+import { ErrorBanner } from "@/components/error-banner";
+import { EmptyState } from "@/components/empty-state";
 import {
   getBatch,
   listBatchStudents,
@@ -58,12 +62,12 @@ export default function BatchDetailPage({ params }: { params: Promise<{ id: stri
   }
 
   if (error) {
-    return <p className="text-sm text-red-600">{error}</p>;
+    return <ErrorBanner message={error} />;
   }
 
   if (batch === null) {
     return (
-      <div className="space-y-2">
+      <div className="space-y-3">
         <Skeleton className="h-8 w-64" />
         <Skeleton className="h-24 w-full" />
       </div>
@@ -71,21 +75,25 @@ export default function BatchDetailPage({ params }: { params: Promise<{ id: stri
   }
 
   return (
-    <div>
-      <h1 className="text-2xl font-semibold">{batch.name}</h1>
-      <p className="mt-1 text-sm text-muted-foreground">
-        {[batch.grade && `Grade ${batch.grade}`, batch.section && `Section ${batch.section}`, batch.academic_year]
-          .filter(Boolean)
-          .join(" · ") || "No details set"}
-      </p>
-
-      <div className="mt-6 flex items-center justify-between">
-        <h2 className="text-lg font-medium">Roster</h2>
-        <Button onClick={() => setShowForm((v) => !v)}>{showForm ? "Cancel" : "Add Student"}</Button>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        title={batch.name}
+        description={
+          [batch.grade && `Grade ${batch.grade}`, batch.section && `Section ${batch.section}`, batch.academic_year]
+            .filter(Boolean)
+            .join(" · ") || "No details set"
+        }
+        icon={Users}
+        action={
+          <Button className="gap-1.5" onClick={() => setShowForm((v) => !v)}>
+            {!showForm && <UserPlus className="size-4" />}
+            {showForm ? "Cancel" : "Add student"}
+          </Button>
+        }
+      />
 
       {showForm && (
-        <Card className="mt-4 max-w-md">
+        <Card className="max-w-md border-0 shadow-sm ring-1 ring-border">
           <CardHeader>
             <CardTitle className="text-base">Add student</CardTitle>
           </CardHeader>
@@ -105,7 +113,7 @@ export default function BatchDetailPage({ params }: { params: Promise<{ id: stri
                   onChange={(e) => setEmail(e.target.value)}
                 />
               </div>
-              {formError && <p className="text-sm text-red-600">{formError}</p>}
+              {formError && <ErrorBanner message={formError} />}
               <Button type="submit" disabled={submitting}>
                 {submitting ? "Adding..." : "Add"}
               </Button>
@@ -114,38 +122,47 @@ export default function BatchDetailPage({ params }: { params: Promise<{ id: stri
         </Card>
       )}
 
-      <div className="mt-4">
+      <div>
+        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">Roster</h2>
+
         {students === null && <Skeleton className="h-10 w-full" />}
 
         {students !== null && students.length === 0 && (
-          <p className="text-sm text-muted-foreground">
-            No students in this batch yet. Add one to get started.
-          </p>
+          <EmptyState
+            icon={UserPlus}
+            title="No students in this batch yet"
+            description="Add one to get started."
+            action={<Button onClick={() => setShowForm(true)}>Add student</Button>}
+          />
         )}
 
         {students !== null && students.length > 0 && (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Email</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Joined</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {students.map((s) => (
-                <TableRow key={s.student_id}>
-                  <TableCell className="font-medium">{s.name}</TableCell>
-                  <TableCell>{s.email}</TableCell>
-                  <TableCell>
-                    <Badge variant={s.status === "ACTIVE" ? "default" : "secondary"}>{s.status}</Badge>
-                  </TableCell>
-                  <TableCell>{new Date(s.joined_at).toLocaleDateString()}</TableCell>
+          <div className="overflow-hidden rounded-lg border border-border">
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead>Name</TableHead>
+                  <TableHead>Email</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Joined</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {students.map((s) => (
+                  <TableRow key={s.student_id}>
+                    <TableCell className="font-medium">{s.name}</TableCell>
+                    <TableCell className="text-muted-foreground">{s.email}</TableCell>
+                    <TableCell>
+                      <Badge variant={s.status === "ACTIVE" ? "default" : "secondary"}>{s.status}</Badge>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {new Date(s.joined_at).toLocaleDateString()}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
         )}
       </div>
     </div>

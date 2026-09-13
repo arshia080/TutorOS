@@ -2,10 +2,14 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { ClipboardList, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { PageHeader } from "@/components/page-header";
+import { ErrorBanner } from "@/components/error-banner";
+import { EmptyState } from "@/components/empty-state";
 import { useAuth } from "@/lib/use-auth";
 import { dueCountdown } from "@/lib/format";
 import {
@@ -65,14 +69,21 @@ function TeacherHomeworkView() {
   useEffect(load, []);
 
   return (
-    <div>
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Homework</h1>
-        <Button onClick={() => setShowForm((v) => !v)}>{showForm ? "Cancel" : "New Homework"}</Button>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        title="Homework"
+        description="Assignments across all your batches."
+        icon={ClipboardList}
+        action={
+          <Button className="gap-1.5" onClick={() => setShowForm((v) => !v)}>
+            {!showForm && <Plus className="size-4" />}
+            {showForm ? "Cancel" : "New homework"}
+          </Button>
+        }
+      />
 
       {showForm && (
-        <Card className="mt-4 max-w-lg">
+        <Card className="max-w-lg border-0 shadow-sm ring-1 ring-border">
           <CardHeader>
             <CardTitle className="text-base">Create homework</CardTitle>
           </CardHeader>
@@ -87,8 +98,8 @@ function TeacherHomeworkView() {
         </Card>
       )}
 
-      <div className="mt-6 space-y-3">
-        {error && <p className="text-sm text-red-600">{error}</p>}
+      <div className="space-y-3">
+        {error && <ErrorBanner message={error} />}
 
         {!error && homework === null && (
           <>
@@ -98,7 +109,7 @@ function TeacherHomeworkView() {
         )}
 
         {homework !== null && homework.length === 0 && !error && (
-          <p className="text-sm text-muted-foreground">No homework assigned yet.</p>
+          <EmptyState icon={ClipboardList} title="No homework assigned yet" />
         )}
 
         {homework?.map((hw) => {
@@ -106,13 +117,13 @@ function TeacherHomeworkView() {
           const { label, overdue } = dueCountdown(hw.due_date);
           return (
             <Link key={hw.id} href={`/dashboard/homework/${hw.id}`}>
-              <Card className="transition-colors hover:bg-muted/50">
+              <Card className="border-0 shadow-sm ring-1 ring-border transition-shadow hover:shadow-md">
                 <CardContent className="flex items-center justify-between py-4">
                   <div>
-                    <p className="font-medium">{hw.title}</p>
+                    <p className="font-medium text-foreground">{hw.title}</p>
                     <p className="text-sm text-muted-foreground">
                       Due {new Date(hw.due_date).toLocaleString()} ·{" "}
-                      <span className={overdue ? "text-red-600" : ""}>{label}</span>
+                      <span className={overdue ? "text-destructive" : ""}>{label}</span>
                     </p>
                   </div>
                   {c && (
@@ -178,11 +189,11 @@ function StudentHomeworkView() {
   }
 
   return (
-    <div>
-      <h1 className="text-2xl font-semibold">Homework</h1>
+    <div className="space-y-6">
+      <PageHeader title="Homework" description="Assignments from your teachers." icon={ClipboardList} />
 
-      <div className="mt-6 space-y-3">
-        {error && <p className="text-sm text-red-600">{error}</p>}
+      <div className="space-y-3">
+        {error && <ErrorBanner message={error} />}
 
         {!error && homework === null && (
           <>
@@ -192,7 +203,7 @@ function StudentHomeworkView() {
         )}
 
         {homework !== null && homework.length === 0 && !error && (
-          <p className="text-sm text-muted-foreground">No homework assigned yet.</p>
+          <EmptyState icon={ClipboardList} title="No homework assigned yet" />
         )}
 
         {homework?.map((hw) => {
@@ -201,15 +212,15 @@ function StudentHomeworkView() {
           const canSubmit = !overdue || hw.allow_late_submissions;
 
           return (
-            <Card key={hw.id}>
+            <Card key={hw.id} className="border-0 shadow-sm ring-1 ring-border">
               <CardContent className="py-4">
-                <div className="flex items-start justify-between">
+                <div className="flex items-start justify-between gap-4">
                   <div>
-                    <p className="font-medium">{hw.title}</p>
+                    <p className="font-medium text-foreground">{hw.title}</p>
                     {hw.description && <p className="text-sm text-muted-foreground">{hw.description}</p>}
                     <p className="mt-1 text-sm text-muted-foreground">
                       Due {new Date(hw.due_date).toLocaleString()} ·{" "}
-                      <span className={overdue ? "text-red-600" : ""}>{label}</span>
+                      <span className={overdue ? "text-destructive" : ""}>{label}</span>
                     </p>
                     {hw.attachments.length > 0 && (
                       <div className="mt-2 flex flex-wrap gap-2">
@@ -226,7 +237,7 @@ function StudentHomeworkView() {
                       </div>
                     )}
                   </div>
-                  <div className="text-right">
+                  <div className="shrink-0 text-right">
                     {submission ? (
                       <Badge variant={submission.status === "LATE" ? "destructive" : "default"}>
                         {submission.status === "LATE" ? "Submitted late" : "Submitted"}
@@ -258,7 +269,11 @@ function StudentHomeworkView() {
                       The deadline has passed and late submissions aren&apos;t accepted.
                     </p>
                   )}
-                  {uploadError[hw.id] && <p className="text-sm text-red-600">{uploadError[hw.id]}</p>}
+                  {uploadError[hw.id] && (
+                    <div className="mt-2">
+                      <ErrorBanner message={uploadError[hw.id]} />
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>

@@ -1,8 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { GraduationCap } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
+import { PageHeader } from "@/components/page-header";
+import { ErrorBanner } from "@/components/error-banner";
+import { EmptyState } from "@/components/empty-state";
 import { listStudents, type Student, ApiError } from "@/lib/api";
 
 export default function StudentsPage() {
@@ -16,31 +20,32 @@ export default function StudentsPage() {
   }, []);
 
   return (
-    <div>
-      <h1 className="text-2xl font-semibold">Students</h1>
-      <p className="mt-1 text-sm text-muted-foreground">Every student across your batches.</p>
+    <div className="space-y-6">
+      <PageHeader title="Students" description="Every student across your batches." icon={GraduationCap} />
 
-      <div className="mt-6">
-        {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && <ErrorBanner message={error} />}
 
-        {!error && students === null && (
-          <div className="space-y-2">
-            <Skeleton className="h-10 w-full" />
-            <Skeleton className="h-10 w-full" />
-            <Skeleton className="h-10 w-full" />
-          </div>
-        )}
+      {!error && students === null && (
+        <div className="space-y-2">
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-10 w-full" />
+        </div>
+      )}
 
-        {students !== null && students.length === 0 && !error && (
-          <p className="text-sm text-muted-foreground">
-            No students yet. Add students from a batch's roster.
-          </p>
-        )}
+      {students !== null && students.length === 0 && !error && (
+        <EmptyState
+          icon={GraduationCap}
+          title="No students yet"
+          description="Add students from a batch's roster."
+        />
+      )}
 
-        {students !== null && students.length > 0 && (
+      {students !== null && students.length > 0 && (
+        <div className="overflow-hidden rounded-lg border border-border">
           <Table>
             <TableHeader>
-              <TableRow>
+              <TableRow className="hover:bg-transparent">
                 <TableHead>Name</TableHead>
                 <TableHead>Email</TableHead>
                 <TableHead>Grade</TableHead>
@@ -50,14 +55,14 @@ export default function StudentsPage() {
               {students.map((s) => (
                 <TableRow key={s.id}>
                   <TableCell className="font-medium">{s.name}</TableCell>
-                  <TableCell>{s.email}</TableCell>
-                  <TableCell>{s.grade ?? "—"}</TableCell>
+                  <TableCell className="text-muted-foreground">{s.email}</TableCell>
+                  <TableCell className="text-muted-foreground">{s.grade ?? "—"}</TableCell>
                 </TableRow>
               ))}
             </TableBody>
           </Table>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }
