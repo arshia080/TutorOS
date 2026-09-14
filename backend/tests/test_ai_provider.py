@@ -7,7 +7,8 @@ from app.ai.gemini_provider import GeminiProvider
 from app.core.config import settings
 
 
-def test_missing_api_key_raises_clear_error_lazily():
+def test_missing_api_key_raises_clear_error_lazily(monkeypatch):
+    monkeypatch.setattr(settings, "anthropic_api_key", None)
     provider = AnthropicProvider(api_key=None, model="claude-sonnet-5")
     with pytest.raises(AIProviderError, match="ANTHROPIC_API_KEY"):
         provider.generate_structured("prompt", {"type": "object"}, "tool")
