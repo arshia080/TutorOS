@@ -141,6 +141,17 @@ the same platform, or even the same cloud provider. In production, run at
 least one Celery worker process alongside the API process — jobs enqueue fine
 without one, but never execute.
 
+**Concretely**: `render.yaml` at the repo root is a Render Blueprint that
+provisions the backend web service, the Celery worker, Postgres, and Redis
+in one step (Render → New → Blueprint → point at this repo). The frontend
+deploys separately to Vercel (root directory `frontend`, one env var:
+`NEXT_PUBLIC_API_URL` pointing at the Render backend's URL). `DATABASE_URL`
+accepts a managed provider's raw `postgres://`/`postgresql://` connection
+string directly (auto-normalized to the `postgresql+psycopg://` driver form
+`app/core/config.py` needs); `CORS_ORIGINS` accepts either the `.env` file's
+JSON-array form or a plain comma-separated string, whichever is easier to
+paste into a given host's dashboard.
+
 ## What's deferred (and why)
 
 - **Real OCR** (`pytesseract`/`pdf2image`): would need system binaries (Tesseract, Poppler) not installed here; the code path is real and would work once they're installed — see `docs/ai-pipeline.md`.

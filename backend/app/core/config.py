@@ -1,3 +1,6 @@
+import json
+
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -7,11 +10,36 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+psycopg://tutoros:tutoros@localhost:5432/tutoros"
     redis_url: str = "redis://localhost:6379/0"
 
+    @field_validator("database_url", mode="before")
+    @classmethod
+    def _normalize_database_url(cls, v: str) -> str:
+        # Managed Postgres providers (Render, Heroku, Railway) hand back a
+        # plain postgres://... or postgresql://... connection string -- our
+        # SQLAlchemy engine needs the psycopg driver named explicitly. Lets
+        # you paste their connection string directly with no manual editing.
+        if v.startswith("postgres://"):
+            v = "postgresql://" + v[len("postgres://") :]
+        if v.startswith("postgresql://"):
+            v = "postgresql+psycopg://" + v[len("postgresql://") :]
+        return v
+
     jwt_secret_key: str = "change-me-in-production"
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 60 * 24
 
-    cors_origins: list[str] = ["http://localhost:3000"]
+    # Read as a plain string (not list[str]) so pydantic-settings never tries
+    # to JSON-decode it itself -- `cors_origins` below accepts EITHER a JSON
+    # array (the .env file's own format, e.g. ["http://localhost:3000"]) OR a
+    # plain comma-separated string (easier to paste into a host's env var UI,
+    # e.g. Render/Vercel), with no manual reformatting needed either way.
+    cors_origins_raw: str = Field(default='["http://localhost:3000"]', alias="CORS_ORIGINS")
+
+    @property
+    def cors_origins(self) -> list[str]:
+        raw = self.cors_origins_raw.strip()
+        if raw.startswith("["):
+            return json.loads(raw)
+        return [origin.strip() for origin in raw.split(",") if origin.strip()]
 
     log_level: str = "INFO"
 
@@ -62,6 +90,26 @@ class Settings(BaseSettings):
 
     # How long a teacher-generated parent/student link invite code stays valid.
     link_invite_code_expiry_hours: int = 24
+
+    # Google Sign-In (OpenID Connect). No defaults for the client id/secret --
+    # Google auth raises a clear error at call time if these aren't set, same
+    # pattern as anthropic_api_key. Never commit real values; see .env.example.
+    google_client_id: str | None = None
+    google_client_secret: str | None = None
+    # Must exactly match a redirect URI registered in the Google Cloud Console
+    # for this OAuth client, including scheme/host/port/path.
+    google_redirect_uri: str = "http://localhost:8050/auth/google/callback"
+    # Where browser-redirect steps of the OAuth flow (success, error, choose-role)
+    # send the user back to. The SPA's origin, not the API's.
+    frontend_url: str = "http://localhost:3000"
+    # How long the signed OAuth `state` (CSRF nonce) and the pending-signup
+    # token stay valid -- both are single-use, short-lived by design.
+    google_oauth_state_expire_minutes: int = 10
+
+    # Rate limit for unauthenticated auth endpoints particularly exposed to
+    # abuse (currently just the Google OAuth callback) -- per source IP, per
+    # minute. See app/core/rate_limit.py::rate_limit_by_ip.
+    auth_rate_limit_per_minute: int = 20
 
 
 settings = Settings()

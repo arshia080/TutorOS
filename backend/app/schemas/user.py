@@ -3,7 +3,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, EmailStr, ConfigDict
 
-from app.models.user import UserRole
+from app.models.user import AuthProvider, UserRole
 
 
 class UserRead(BaseModel):
@@ -14,3 +14,5 @@ class UserRead(BaseModel):
     email: EmailStr
     role: UserRole
     created_at: datetime
+    auth_provider: AuthProvider
+    google_linked: bool = False

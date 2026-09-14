@@ -4,12 +4,16 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 export type UserRole = "TEACHER" | "STUDENT" | "PARENT" | "ADMIN";
 
+export type AuthProvider = "LOCAL" | "GOOGLE";
+
 export interface User {
   id: string;
   name: string;
   email: string;
   role: UserRole;
   created_at: string;
+  auth_provider: AuthProvider;
+  google_linked: boolean;
 }
 
 export interface TokenResponse {
@@ -100,6 +104,41 @@ export function login(email: string, password: string) {
 
 export function me() {
   return request<User>("/auth/me", {}, true);
+}
+
+// ---------------------------------------------------------------------------
+// Google Sign-In
+//
+// This is a full-page redirect flow, not a fetch() call: clicking the button
+// navigates the browser to the backend, which redirects to Google, which
+// redirects back to the backend, which finally redirects to this frontend at
+// /auth/google/complete (with the app's JWT in the URL fragment -- never sent
+// to any server, unlike a query param) or /auth/google/choose-role (with a
+// short-lived pending-signup token) for a first-time sign-in.
+// ---------------------------------------------------------------------------
+
+export function googleLoginUrl(): string {
+  return `${API_URL}/auth/google/login`;
+}
+
+export function getGoogleLinkUrl() {
+  // Authenticated fetch -- the resulting authorization_url is what the page
+  // should navigate to (a plain <a href> or window.location.href can't carry
+  // the Authorization header this endpoint needs).
+  return request<{ authorization_url: string }>("/auth/google/link", {}, true);
+}
+
+export type GoogleSignupRole = "TEACHER" | "STUDENT" | "PARENT";
+
+export function completeGoogleSignup(
+  pendingToken: string,
+  role: GoogleSignupRole,
+  extra: { phone?: string; locality?: string } = {},
+) {
+  return request<TokenResponse>("/auth/google/complete-signup", {
+    method: "POST",
+    body: JSON.stringify({ pending_token: pendingToken, role, ...extra }),
+  });
 }
 
 export interface DashboardOverview {

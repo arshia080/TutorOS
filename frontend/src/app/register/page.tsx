@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { GoogleSignInButton } from "@/components/google-signin-button";
 import { register, ApiError, type UserRole } from "@/lib/api";
 import { setToken } from "@/lib/auth";
 
@@ -75,7 +76,15 @@ export default function RegisterPage() {
             <CardTitle className="text-xl">Create your TutorOS account</CardTitle>
           </CardHeader>
           <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-4">
+              <GoogleSignInButton label="Sign up with Google" />
+              <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                <div className="h-px flex-1 bg-border" />
+                or
+                <div className="h-px flex-1 bg-border" />
+              </div>
+            </div>
+            <form onSubmit={handleSubmit} className="mt-4 space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="name">Name</Label>
                 <Input id="name" required value={name} onChange={(e) => setName(e.target.value)} />

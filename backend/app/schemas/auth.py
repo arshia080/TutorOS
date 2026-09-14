@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic import BaseModel, EmailStr, Field
 
 from app.models.user import UserRole
@@ -23,3 +25,18 @@ class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     user: UserRead
+
+
+# Deliberately excludes ADMIN -- a first-time Google sign-in should never be
+# able to self-select an administrative role, same reasoning a public signup
+# form shouldn't offer it (the existing /auth/register endpoint accepting any
+# UserRole including ADMIN is a pre-existing gap, unrelated to this phase and
+# not touched here).
+GoogleSignupRole = Literal["TEACHER", "STUDENT", "PARENT"]
+
+
+class CompleteGoogleSignupRequest(BaseModel):
+    pending_token: str
+    role: GoogleSignupRole
+    phone: str | None = Field(default=None, max_length=30)
+    locality: str | None = Field(default=None, max_length=255)

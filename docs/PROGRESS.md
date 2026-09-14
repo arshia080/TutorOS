@@ -1,5 +1,234 @@
 # Build Log
 
+## 2026-09-13 — Phase 9: Google Authentication
+
+Adds "Sign in with Google" (OpenID Connect, authorization code flow)
+alongside the existing email/password auth from Phase 0, without changing
+that flow at all — every existing `POST /auth/login`/`POST /auth/register`
+test still passes unchanged, and a regression check against the real running
+Postgres-backed dev server confirmed a seeded LOCAL account still logs in
+identically after this phase's schema changes.
+
+**The account-matching decision (the highest-risk part of this phase):**
+Went with **option (b)** — a Google sign-in whose email matches an existing
+LOCAL account (no `google_id` linked yet) is **rejected outright**, never
+silently merged, with a message pointing the user at their password and at
+account linking from Settings:
+
+```
+"An account already exists with this email. Sign in with your password,
+ then connect Google from Settings."
+```
+
+The reasoning is exactly the risk the prompt named: `email_verified` on a
+Google ID token is Google's claim, not a cryptographic proof this specific
+human owns the LOCAL account already sitting at that email address in *our*
+database. Auto-linking on email match alone means a bug or edge case in
+Google's verification (or, more realistically, a LOCAL account registered
+with an email the person doesn't currently control — a lapsed domain, a
+typo'd signup, a shared/former work email) becomes a silent account
+takeover. Rejecting and requiring an *explicit*, *already-authenticated*
+linking step closes that gap: `link_google_account()` only ever runs after
+the request has already passed through `get_current_user` (a valid existing
+session, proven by password login), so linking Google requires proving you
+already control the account by a completely different, already-trusted
+mechanism. This is why the account-linking capability mentioned as optional
+in option (b)'s text was built as a real feature, not left as a promise the
+rejection message makes and nothing fulfills — it directly closes the loop.
+
+**Why `google_id` is separate from `auth_provider`** (a deliberate schema
+decision beyond the prompt's literal two-column ask): a LOCAL user who links
+Google keeps `auth_provider = LOCAL` — that column answers "how was this
+account originally created," not "what can it sign in with today."
+`google_id IS NOT NULL` is the actual, single source of truth for "can this
+account also sign in with Google" (exposed to the frontend as
+`UserRead.google_linked`, a computed property, not a stored column). This
+means the account-matching logic never has to reason about `auth_provider`
+at all when deciding whether a Google login should succeed — it only ever
+asks "does a user with this `google_id` exist" and, failing that, "does a
+user with this email exist" (collision) or not (new signup). Simpler
+invariant, fewer states to get wrong.
+
+**DB (migration `70c55e969973`):** `password_hash` made nullable (a
+GOOGLE-only account never sets one — `authenticate_user()` was audited and
+fixed to check `password_hash is not None` before ever calling
+`verify_password()`, since passlib doesn't handle a `None` hash gracefully);
+`auth_provider` enum column (`LOCAL`/`GOOGLE`, default `LOCAL`, backfilling
+every pre-existing seeded/created user correctly since Google auth didn't
+exist before this phase); `google_id` (nullable, unique, indexed). One real
+migration wrinkle hit and fixed here: unlike every prior phase's enum
+columns (created together with their table via `op.create_table`, which
+auto-creates the Postgres type as a side effect), adding an enum column to
+an **existing** table via `op.add_column` doesn't auto-create the type —
+`ALTER TABLE users ADD COLUMN auth_provider auth_provider ...` failed with
+"type does not exist" until the migration was hand-edited to call
+`sa.Enum(...).create(op.get_bind(), checkfirst=True)` first, with a matching
+`.drop()` in `downgrade()`. Also hand-added a `server_default='LOCAL'` on
+the `ADD COLUMN` step (Postgres requires one when adding a `NOT NULL`
+column to a non-empty table) and dropped the default immediately after, so
+the column definition matches the model exactly (new rows get their default
+from `app/models/user.py`, not from the database).
+
+**Backend (`app/services/google_oauth_service.py`, `app/services/auth_service.py`,
+`app/api/routes/auth.py`):**
+- Three signed, short-lived JWTs (reusing the app's existing `jwt_secret_key`
+  and `jose` signing infra — "the app's own JWT issuance," just for
+  different purposes than a session token) do all the trust-boundary work:
+  the CSRF `state` parameter (`purpose: google_login` or `google_link`,
+  10-minute expiry), the pending-signup token (issued only *after* a real
+  Google ID token has already been verified server-side, carrying the
+  verified `sub`/`email`/`name` so the frontend's role choice is the only
+  thing `POST /auth/google/complete-signup` has to trust from the client),
+  and nothing else needs its own crypto.
+- `GET /auth/google/login` builds the Google consent URL (`scope=openid
+  email profile`, `state=<signed nonce>`) and redirects immediately — this
+  one really can be a bare redirect since it's reached by a browser with no
+  session yet.
+- `GET /auth/google/callback`: **CSRF check first, before anything else** —
+  `decode_state()` rejects a forged, tampered, or expired `state` and the
+  function returns immediately; the code exchange and ID-token verification
+  literally cannot run without a valid state. Then: exchange code for
+  tokens server-to-server (`httpx.post` to Google's token endpoint — the
+  frontend never sees a Google ID token at all in this flow), verify the ID
+  token's **signature** against Google's live JWKS (`jose.jwt.decode` with
+  the matching JWK by `kid`, `algorithms=["RS256"]`, `audience=` the app's
+  own client id) plus `iss` checked against both of Google's two valid
+  issuer strings (`accounts.google.com` / `https://accounts.google.com` —
+  `jose` only accepts one issuer value per call, so this one check is done
+  manually after decode). `email_verified: false` is rejected outright,
+  before any account lookup happens — no user is created or touched.
+- `GET /auth/google/link` is **not** a redirect (a plain browser navigation
+  can't carry the `Authorization` header this authenticated endpoint needs)
+  — it's a normal authenticated JSON endpoint returning
+  `{authorization_url}`, which the frontend then navigates to itself with
+  `window.location.href`. This is the one place the OAuth flow's "redirect
+  vs JSON" shape had to bend around an already-logged-in caller.
+- `find_user_for_google_login()` is the single function the account-matching
+  decision lives in: lookup by `google_id` → login; else lookup by `email`
+  → raise `GoogleLoginCollision` (never silently merge); else `None` → the
+  route redirects to `/auth/google/choose-role?token=<pending>` instead of
+  creating a user with a guessed role.
+- `POST /auth/google/complete-signup` re-validates for a race (two tabs
+  completing signup, or a LOCAL account registered with that email in the
+  10-minute window) rather than trusting the pending token's freshness
+  alone, and its `role` field is a `Literal["TEACHER","STUDENT","PARENT"]`
+  — deliberately narrower than the existing `POST /auth/register`, which
+  still accepts any `UserRole` including `ADMIN` (a pre-existing gap from
+  Phase 0, unrelated to this phase and not touched here, but worth not
+  making *worse* on a new public endpoint).
+- `rate_limit_by_ip()` (new function in `app/core/rate_limit.py`, alongside
+  the existing per-user `rate_limit()`) applied to `/auth/google/callback` —
+  this endpoint is reached by an anonymous browser mid-redirect, so it has
+  no authenticated user to key a rate limit on yet; keyed by
+  `request.client.host` instead, same Redis `INCR`+`EXPIRE` mechanism.
+  Worth noting: **no other auth endpoint in this codebase has rate limiting
+  today** (checked before writing this — `/auth/login`/`/auth/register`
+  have none), so "like other auth endpoints" mostly meant "reuse the
+  existing rate-limiting *pattern*," not an existing sibling; this phase
+  doesn't retroactively add it to the password endpoints since that's a
+  separate, unscoped decision about brute-force protection.
+- `.env.example` gained `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`/
+  `GOOGLE_REDIRECT_URI`/`FRONTEND_URL` with placeholder values (the client
+  id/secret are `None` by default — Google auth endpoints return a clean
+  `google_not_configured` redirect rather than crashing on boot, same
+  pattern as `anthropic_api_key`).
+
+**Tests (11 new, 160 total, all passing):** new-user signup through the
+pending-token → role-selection → account-creation path (and that no user
+row exists in the gap between them); a first-time signup rejected from
+self-selecting `ADMIN` (422, since the schema itself excludes it); login for
+an existing GOOGLE-provider user; `email_verified: false` rejected with zero
+account creation; the LOCAL/GOOGLE email collision explicitly asserting the
+LOCAL account's `google_id` stays `None` afterward (never auto-linked); the
+full explicit-linking flow (link → same Google identity now logs into the
+*same* account) and its email-mismatch rejection; three separate CSRF
+cases — a completely forged state, a missing state, and a correctly-signed
+but expired state — each asserted to redirect with `error=invalid_state`
+*and* (for the forged case) that `exchange_code_for_id_token` was never even
+called, proving the CSRF check genuinely gates the network call rather than
+just happening to also fail later; and a same-role-both-ways check that a
+Google-issued JWT and a password-issued JWT produce identical results
+(`201`/`200`) against the same teacher-only endpoints. Every test that
+stands in for "a real Google login happened" does so by monkeypatching
+`google_oauth_service.exchange_code_for_id_token`/`.verify_id_token`
+directly (the same test-double-via-module-monkeypatch pattern this codebase
+already uses for `db_session_module.SessionLocal` and the AI provider) —
+the state-signing and JWT-decoding logic itself is never mocked, only the
+two functions that would otherwise talk to Google's real servers.
+
+**Frontend:** a `GoogleSignInButton` component following Google's official
+branding guidelines (the real multicolor "G" mark, specified border color
+`#747775`, white background — not a custom lookalike) added to both
+`/login` and `/register`; `/login` also reads `?error=<code>` and maps every
+backend error code to a specific human-readable message (not a generic
+"something went wrong"). `/auth/google/complete` reads the JWT from the URL
+**fragment** (`#token=...`, deliberately not a query param — fragments are
+never sent to any server and never appear in Referer headers, unlike query
+strings) and stores it exactly like a password login would. `/auth/google/choose-role`
+reads the pending-signup token from the query string (fine there — it's
+short-lived and single-use, not a session credential) and posts the chosen
+role to `complete-signup`. New `/dashboard/settings` page (didn't exist
+before this phase) with a "Connect Google account" action for LOCAL users
+without `google_linked`, calling the authenticated `GET /auth/google/link`
+and then navigating the browser to the URL it returns.
+
+**Decisions:**
+- No student-approval-style alternative was considered for the collision
+  case (only option (b), never option (a)'s "confirm via password inline
+  during the Google flow itself") — (b) needed no new UI surface mid-OAuth-
+  redirect, just a message and a link to a place that already needed to
+  exist (Settings).
+- `password_hash` is nullable now, but `RegisterRequest`'s password field is
+  still required and unchanged — a LOCAL account always has a password; only
+  a GOOGLE-created account can have `password_hash IS NULL`. Nothing in this
+  phase makes password login optional for anyone who already has one.
+- The pending-signup and state JWTs share the main session-token signing key
+  (`settings.jwt_secret_key`) rather than a separate secret — they're
+  already short-lived, single-purpose, and distinguished by a `purpose`
+  claim checked on every decode; a second secret would be additional
+  configuration surface for no real isolation benefit at this scale.
+
+**Verified:**
+- `pytest` — 160/160 passing (149 prior + 11 new).
+- `npm run build` — succeeds; all 4 new routes (`/auth/google/complete`,
+  `/auth/google/choose-role`, `/dashboard/settings`, plus the extended
+  login/register pages) compile and type-check cleanly, including the
+  `useSearchParams()` + `Suspense` boundary Next.js requires for pages that
+  read query params on a client component (missing this fails the build,
+  not just a runtime warning — caught and fixed here).
+- **Live-verified against the real running dev server** everything that
+  doesn't require an actual registered Google OAuth client or a real Google
+  account (neither exists in this environment, same category of limitation
+  as every other external-service phase — the Anthropic API key, real S3,
+  etc.): `GET /auth/google/login` with no client id configured redirects
+  cleanly to `.../login?error=google_not_configured` instead of crashing;
+  existing seeded LOCAL accounts (`priya.nair@tutoros.dev`) still log in and
+  register normally post-migration, with the response now correctly
+  including `auth_provider: "LOCAL"` and `google_linked: false`; a forged
+  `state` on `/auth/google/callback` redirects with `error=invalid_state`
+  rather than crashing or proceeding; and `build_authorization_url()`
+  produces a well-formed Google consent URL (verified directly, including a
+  correctly round-tripping signed `state`) once fake credentials are set.
+  The frontend dev server was confirmed serving all new pages, and the
+  Google button renders on both `/login` and `/register`.
+- **Not verified**: an actual end-to-end login with a real Google test
+  account through a real browser, for any of the three roles — this
+  environment has no browser and no registered Google Cloud OAuth client.
+  Everything up to and including real-Google-server communication (the
+  code-exchange and JWKS-signature-verification *logic*) is implemented and
+  covered by the mocked test suite; only "does Google's real consent screen
+  and token endpoint actually behave the way its documentation says" is
+  unverified, which is exactly the boundary `google_oauth_service`'s two
+  network-calling functions exist to isolate. **Before this goes near
+  production**: register a real OAuth 2.0 Client ID in the Google Cloud
+  Console, set the real `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`/
+  `GOOGLE_REDIRECT_URI` in a real `.env`, and click through the full flow at
+  least once per role (new signup, existing-Google login, LOCAL-collision
+  rejection, and account linking from Settings) in an actual browser.
+
+**This phase stops here for review before any of it goes near production**,
+per the explicit instruction.
+
 ## 2026-09-13 — Phase 8: Parent Portal (extends beyond original MVP scope)
 
 The original spec (§3) explicitly deferred the PARENT role but designed the

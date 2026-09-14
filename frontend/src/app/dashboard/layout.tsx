@@ -64,10 +64,20 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <div className="mt-8 border-t border-sidebar-border pt-4">
           <p className="px-2 text-sm font-medium">{user.name}</p>
           <p className="px-2 text-xs text-sidebar-foreground/60">{user.role}</p>
+          <Link
+            href="/dashboard/settings"
+            className={`mt-2 block rounded-md px-2 py-1.5 text-sm transition-colors ${
+              pathname === "/dashboard/settings"
+                ? "bg-sidebar-primary text-sidebar-primary-foreground font-medium"
+                : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+            }`}
+          >
+            Settings
+          </Link>
           <Button
             variant="ghost"
             size="sm"
-            className="mt-2 w-full justify-start text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+            className="mt-1 w-full justify-start text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
             onClick={() => {
               clearToken();
               router.replace("/login");
