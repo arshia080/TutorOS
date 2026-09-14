@@ -68,10 +68,19 @@ class Settings(BaseSettings):
     # percentage points) to call a trend "improving"/"declining" rather than "stable".
     analytics_trend_threshold: float = 0.05
 
+    # Which AIProvider implementation get_ai_provider() (app/ai/__init__.py)
+    # instantiates -- "anthropic" or "gemini". The two providers' credentials
+    # below are independent and both harmless to leave unset if you're not
+    # using that one; only the selected provider's key is ever read.
+    ai_provider: str = "anthropic"
+
     # No default: AI features raise a clear error at call time (not at import
     # time) if this isn't set, rather than silently using a placeholder key.
     anthropic_api_key: str | None = None
     ai_model: str = "claude-sonnet-5"
+
+    gemini_api_key: str | None = None
+    gemini_model: str = "gemini-2.0-flash"
 
     # A topic is "weak" (spec section 19) when mastery_score is below this.
     # Matches the "Needs Improvement"/"Critical" boundary from section 17's bands.
