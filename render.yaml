@@ -58,36 +58,42 @@ services:
       - key: CORS_ORIGINS
         sync: false
 
-  # The worker only ever runs process_extraction_job / recalculate_after_attempt
-  # (see app/celery_app.py) -- it never touches a JWT or the Google OAuth flow,
-  # so it only gets the env vars those two jobs actually read: the DB, Redis,
-  # the AI provider, and storage config (PDF extraction reads/writes files).
-  - type: worker
-    name: tutoros-celery-worker
-    runtime: python
-    plan: free
-    rootDir: backend
-    buildCommand: pip install -r requirements.txt
-    startCommand: "celery -A app.celery_app worker --loglevel=info"
-    envVars:
-      - key: DATABASE_URL
-        fromDatabase:
-          name: tutoros-db
-          property: connectionString
-      - key: REDIS_URL
-        fromService:
-          type: redis
-          name: tutoros-redis
-          property: connectionString
-      - key: LOG_LEVEL
-        value: INFO
-      - key: STORAGE_BACKEND
-        value: local
-      - key: UPLOAD_DIR
-        value: ./uploads
-      - key: AI_PROVIDER
-        value: gemini
-      - key: GEMINI_MODEL
-        value: gemini-2.0-flash
-      - key: GEMINI_API_KEY
-        sync: false
+  # Background Worker services require a paid Render plan (not available on
+  # Free) -- deliberately omitted for now. Without it, PDF-to-quiz extraction
+  # jobs are accepted and queued in Redis but never processed (they'll sit at
+  # status=PENDING forever), and post-attempt analytics recalculation just
+  # doesn't auto-run in the background. Everything else (auth, batches,
+  # homework, manual grading, mastery display, Google/Gemini-backed AI
+  # generation that runs synchronously, etc.) is unaffected. Re-add this
+  # block, changing `plan: free` to `plan: starter` (or above), once/if this
+  # deploy moves to a paid tier:
+  #
+  # - type: worker
+  #   name: tutoros-celery-worker
+  #   runtime: python
+  #   plan: starter
+  #   rootDir: backend
+  #   buildCommand: pip install -r requirements.txt
+  #   startCommand: "celery -A app.celery_app worker --loglevel=info"
+  #   envVars:
+  #     - key: DATABASE_URL
+  #       fromDatabase:
+  #         name: tutoros-db
+  #         property: connectionString
+  #     - key: REDIS_URL
+  #       fromService:
+  #         type: redis
+  #         name: tutoros-redis
+  #         property: connectionString
+  #     - key: LOG_LEVEL
+  #       value: INFO
+  #     - key: STORAGE_BACKEND
+  #       value: local
+  #     - key: UPLOAD_DIR
+  #       value: ./uploads
+  #     - key: AI_PROVIDER
+  #       value: gemini
+  #     - key: GEMINI_MODEL
+  #       value: gemini-2.0-flash
+  #     - key: GEMINI_API_KEY
+  #       sync: false
