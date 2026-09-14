@@ -1,6 +1,32 @@
-envVarGroups:
-  - name: tutoros-shared
+databases:
+  - name: tutoros-db
+    databaseName: tutoros
+    user: tutoros
+    plan: free
+
+services:
+  - type: redis
+    name: tutoros-redis
+    plan: free
+    ipAllowList: []
+
+  - type: web
+    name: tutoros-backend
+    runtime: python
+    plan: free
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT"
     envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: tutoros-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: tutoros-redis
+          property: connectionString
       - key: JWT_SECRET_KEY
         generateValue: true
       - key: JWT_ALGORITHM
@@ -30,38 +56,10 @@ envVarGroups:
       - key: CORS_ORIGINS
         sync: false
 
-databases:
-  - name: tutoros-db
-    databaseName: tutoros
-    user: tutoros
-    plan: free
-
-services:
-  - type: redis
-    name: tutoros-redis
-    plan: free
-    ipAllowList: []
-
-  - type: web
-    name: tutoros-backend
-    runtime: python
-    plan: free
-    rootDir: backend
-    buildCommand: pip install -r requirements.txt
-    startCommand: "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT"
-    envVarGroups:
-      - tutoros-shared
-    envVars:
-      - key: DATABASE_URL
-        fromDatabase:
-          name: tutoros-db
-          property: connectionString
-      - key: REDIS_URL
-        fromService:
-          type: redis
-          name: tutoros-redis
-          property: connectionString
-
+  # The worker only ever runs process_extraction_job / recalculate_after_attempt
+  # (see app/celery_app.py) -- it never touches a JWT or the Google OAuth flow,
+  # so it only gets the env vars those two jobs actually read: the DB, Redis,
+  # the AI provider, and storage config (PDF extraction reads/writes files).
   - type: worker
     name: tutoros-celery-worker
     runtime: python
@@ -69,8 +67,6 @@ services:
     rootDir: backend
     buildCommand: pip install -r requirements.txt
     startCommand: "celery -A app.celery_app worker --loglevel=info"
-    envVarGroups:
-      - tutoros-shared
     envVars:
       - key: DATABASE_URL
         fromDatabase:
@@ -81,3 +77,13 @@ services:
           type: redis
           name: tutoros-redis
           property: connectionString
+      - key: LOG_LEVEL
+        value: INFO
+      - key: STORAGE_BACKEND
+        value: local
+      - key: UPLOAD_DIR
+        value: ./uploads
+      - key: AI_MODEL
+        value: claude-sonnet-5
+      - key: ANTHROPIC_API_KEY
+        sync: false
